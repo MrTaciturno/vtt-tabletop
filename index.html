@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Virtual Tabletop - Mesa de RPG Online</title>
+  <meta name="description" content="Virtual Tabletop leve e de alta performance para jogar RPG por turnos com rolagem de dados em tempo real. Pronto para GitHub Pages." />
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="./src/css/main.css" />
+  <link rel="stylesheet" href="./src/css/components.css" />
+  <link rel="stylesheet" href="./src/css/vtt.css" />
+
+  <!-- External Real-time & Effect Libraries -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="logo-icon">🎲</div>
+      <div class="brand-title">RPG Tabletop</div>
+    </div>
+    
+    <div class="user-nav" id="user-nav-content">
+      <!-- Rendered dynamically by JS -->
+    </div>
+  </nav>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="view-container">
+
+    <!-- VIEW 1: AUTHENTICATION & LOGIN/REGISTRATION -->
+    <section id="view-auth" class="auth-hero">
+      <h1 class="text-gradient">Sua Mesa de RPG em Qualquer Lugar</h1>
+      <p>Conecte-se com seu grupo, crie lobbies instantâneos e jogue por turnos com sistema de dados sincronizado.</p>
+
+      <div class="glass-panel modal-card" style="margin: 0 auto; max-width: 420px; text-align: left;">
+        <div class="auth-tab-group">
+          <button type="button" class="auth-tab active" id="tab-login">Entrar</button>
+          <button type="button" class="auth-tab" id="tab-register">Criar Conta</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-login">
+          <div class="form-group">
+            <label for="login-username">Nome de Usuário</label>
+            <input type="text" id="login-username" name="username" class="form-control" placeholder="Ex: MasterDungeon" required />
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">Senha</label>
+            <input type="password" id="login-password" name="password" class="form-control" placeholder="••••••••" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+            Entrar na Mesa
+          </button>
+        </form>
+
+        <!-- Registration Form -->
+        <form id="form-register" class="hidden">
+          <div class="form-group">
+            <label for="reg-username">Nome de Usuário</label>
+            <input type="text" id="reg-username" name="username" class="form-control" placeholder="Ex: EldrinTheWizard" required />
+          </div>
+
+          <div class="form-group">
+            <label for="reg-password">Criar Senha</label>
+            <input type="password" id="reg-password" name="password" class="form-control" placeholder="••••••••" required />
+          </div>
+
+          <div class="form-group">
+            <label>Avatar / Ícone</label>
+            <select name="avatar" class="form-control">
+              <option value="🧙‍♂️">🧙‍♂️ Mago</option>
+              <option value="🧝‍♀️">🧝‍♀️ Elfa</option>
+              <option value="⚔️">⚔️ Guerreiro</option>
+              <option value="🛡️">🛡️ Paladino</option>
+              <option value="🏹">🏹 Arqueiro</option>
+              <option value="🐉">🐉 Dragão</option>
+              <option value="👑">👑 Mestre</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+            <input type="checkbox" id="reg-is-master" name="isMaster" style="width: 18px; height: 18px; accent-color: var(--accent-gold);" />
+            <label for="reg-is-master" style="cursor: pointer; margin: 0;">Cadastrar com Privilégios de Mestre 👑</label>
+          </div>
+
+          <button type="submit" class="btn btn-gold" style="width: 100%; margin-top: 8px;">
+            Criar Conta & Jogar
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- VIEW 2: LOBBY SELECTION DASHBOARD -->
+    <section id="view-dashboard" class="hidden">
+      <div style="margin-bottom: 32px; text-align: center;">
+        <h2>Painel de Lobbies</h2>
+        <p class="text-muted">Crie um novo lobby como Mestre ou insira o código para entrar na sala do seu grupo.</p>
+      </div>
+
+      <div class="lobby-dashboard">
+        <!-- Create Lobby Card -->
+        <div class="glass-panel dashboard-card">
+          <div>
+            <h3>👑 Criar Novo Lobby</h3>
+            <p>Seja o Mestre da partida, gerencie a ordem dos turnos, conceda privilégios aos jogadores e controle o jogo.</p>
+          </div>
+          <button class="btn btn-gold" id="btn-create-lobby" style="width: 100%;">
+            Criar Sala de RPG
+          </button>
+        </div>
+
+        <!-- Join Lobby Card -->
+        <div class="glass-panel dashboard-card">
+          <div>
+            <h3>🗡️ Entrar em um Lobby</h3>
+            <p>Insira o código de 6 caracteres fornecido pelo seu Mestre para entrar na sala em tempo real.</p>
+            <div class="form-group">
+              <input type="text" id="join-code-input" class="form-control" placeholder="Ex: X7A2B9" style="text-transform: uppercase; font-family: monospace; font-weight: 700; letter-spacing: 2px;" />
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-join-lobby" style="width: 100%;">
+            Entrar no Lobby
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: VIRTUAL TABLETOP ROOM ARENA -->
+    <section id="view-vtt" class="hidden">
+      <!-- VTT Header Bar -->
+      <div class="glass-panel" style="padding: 16px 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <h2 id="vtt-room-title">Mesa de RPG</h2>
+          <span class="badge badge-active">🟢 AO VIVO</span>
+          <span class="badge badge-player" style="font-family: monospace; font-size: 0.9rem;" id="vtt-room-code">------</span>
+          <button class="btn btn-secondary btn-icon" id="btn-copy-code" title="Copiar código do lobby">
+            📋 Copiar Código
+          </button>
+        </div>
+
+        <button class="btn btn-danger" id="btn-leave-lobby">
+          Sair da Sala
+        </button>
+      </div>
+
+      <!-- VTT Grid Arena -->
+      <div class="vtt-container">
+        
+        <!-- Left Sidebar: Connected Players & Master Privilege List -->
+        <aside class="glass-panel sidebar-panel" style="padding: 20px;">
+          <div class="panel-header">
+            <h3 style="font-size: 1.1rem;">👥 Jogadores Conectados</h3>
+          </div>
+          
+          <div class="player-list" id="vtt-player-list">
+            <!-- Rendered by JS -->
+          </div>
+        </aside>
+
+        <!-- Center Arena: Tabletop & Dice Engine -->
+        <section class="glass-panel tabletop-arena" style="border-radius: var(--radius-md);">
+          
+          <!-- Turn Indicator Banner -->
+          <div class="turn-banner" id="turn-banner-el">
+            <div class="active-turn-text" id="active-turn-display">
+              Aguardando início...
+            </div>
+            <button class="btn btn-primary" id="btn-next-turn" style="padding: 8px 16px; font-size: 0.85rem;">
+              Passar Turno ⏩
+            </button>
+          </div>
+
+          <!-- Interactive 3D Dice Stage -->
+          <div class="dice-stage">
+            <div class="dice-display-3d">
+              <div class="dice-cube" id="dice-cube">
+                20
+              </div>
+            </div>
+
+            <!-- Dice Selector Controls -->
+            <div class="dice-selector">
+              <button class="dice-btn" data-dice="d4">d4</button>
+              <button class="dice-btn" data-dice="d6">d6</button>
+              <button class="dice-btn" data-dice="d8">d8</button>
+              <button class="dice-btn" data-dice="d10">d10</button>
+              <button class="dice-btn" data-dice="d12">d12</button>
+              <button class="dice-btn selected" data-dice="d20">d20</button>
+              <button class="dice-btn" data-dice="d100">d100</button>
+            </div>
+
+            <button class="btn btn-gold" id="btn-roll-dice" style="margin-top: 20px; font-size: 1.1rem; padding: 14px 36px;">
+              🎲 Rolar Dado
+            </button>
+          </div>
+        </section>
+
+        <!-- Right Sidebar: Synchronized Dice Roll Feed -->
+        <aside class="glass-panel log-panel" style="padding: 20px;">
+          <div class="panel-header">
+            <h3 style="font-size: 1.1rem;">📜 Histórico de Jogadas</h3>
+          </div>
+
+          <div class="log-feed" id="vtt-roll-log">
+            <!-- Rendered by JS -->
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- SETTINGS & PROFILE MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="glass-panel modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Configurações de Usuário</h3>
+        <button class="btn-icon" id="close-settings">✕</button>
+      </div>
+
+      <form id="form-settings">
+        <div class="form-group">
+          <label for="settings-username">Nome de Usuário</label>
+          <input type="text" id="settings-username" name="username" class="form-control" required />
+        </div>
+
+        <div class="form-group">
+          <label>Escolha seu Avatar</label>
+          <div class="avatar-grid">
+            <div class="avatar-option selected" data-avatar="🧙‍♂️">🧙‍♂️</div>
+            <div class="avatar-option" data-avatar="🧝‍♀️">🧝‍♀️</div>
+            <div class="avatar-option" data-avatar="⚔️">⚔️</div>
+            <div class="avatar-option" data-avatar="🛡️">🛡️</div>
+            <div class="avatar-option" data-avatar="🏹">🏹</div>
+            <div class="avatar-option" data-avatar="🐉">🐉</div>
+            <div class="avatar-option" data-avatar="👑">👑</div>
+            <div class="avatar-option" data-avatar="🎲">🎲</div>
+            <div class="avatar-option" data-avatar="🐺">🐺</div>
+            <div class="avatar-option" data-avatar="⚡">⚡</div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+          Salvar Alterações
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Entry Script -->
+  <script type="module" src="./src/js/app.js"></script>
+</body>
+</html>
