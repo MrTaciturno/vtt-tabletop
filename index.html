@@ -109,7 +109,7 @@
         <div class="glass-panel dashboard-card">
           <div>
             <h3>👑 Criar Novo Lobby</h3>
-            <p>Seja o Mestre da partida, gerencie a ordem dos turnos, conceda privilégios aos jogadores e controle o jogo.</p>
+            <p>Seja o Mestre da partida, gerencie a ordem dos turnos, carregue mapas e insira tokens no grid.</p>
           </div>
           <button class="btn btn-gold" id="btn-create-lobby" style="width: 100%;">
             Criar Sala de RPG
@@ -135,82 +135,207 @@
     <!-- VIEW 3: VIRTUAL TABLETOP ROOM ARENA -->
     <section id="view-vtt" class="hidden">
       <!-- VTT Header Bar -->
-      <div class="glass-panel" style="padding: 16px 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 16px;">
-          <h2 id="vtt-room-title">Mesa de RPG</h2>
+      <div class="glass-panel" style="padding: 12px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <h2 id="vtt-room-title" style="font-size: 1.2rem;">Mesa de RPG</h2>
           <span class="badge badge-active" id="connection-status-badge">🟢 Sala Conectada (WebSockets)</span>
-          <span class="badge badge-player" style="font-family: monospace; font-size: 0.9rem;" id="vtt-room-code">------</span>
+          <span class="badge badge-player" style="font-family: monospace; font-size: 0.85rem;" id="vtt-room-code">------</span>
           <button class="btn btn-secondary btn-icon" id="btn-copy-code" title="Copiar código do lobby">
             📋 Copiar Código
           </button>
         </div>
 
-        <button class="btn btn-danger" id="btn-leave-lobby">
+        <button class="btn btn-danger" id="btn-leave-lobby" style="padding: 6px 14px; font-size: 0.85rem;">
           Sair da Sala
         </button>
       </div>
 
-      <!-- VTT Grid Arena -->
+      <!-- VTT Grid Arena Container -->
       <div class="vtt-container">
         
-        <!-- Left Sidebar: Connected Players & Master Privilege List -->
-        <aside class="glass-panel sidebar-panel" style="padding: 20px;">
+        <!-- Left Sidebar: Connected Players & Turn Indicator -->
+        <aside class="glass-panel sidebar-panel" style="padding: 16px;">
           <div class="panel-header">
-            <h3 style="font-size: 1.1rem;">👥 Jogadores Conectados</h3>
+            <h3 style="font-size: 1rem;">👥 Jogadores</h3>
           </div>
           
           <div class="player-list" id="vtt-player-list">
             <!-- Rendered by JS -->
           </div>
-        </aside>
 
-        <!-- Center Arena: Tabletop & Dice Engine -->
-        <section class="glass-panel tabletop-arena" style="border-radius: var(--radius-md);">
-          
-          <!-- Turn Indicator Banner -->
-          <div class="turn-banner" id="turn-banner-el">
-            <div class="active-turn-text" id="active-turn-display">
+          <!-- Turn Banner -->
+          <div class="turn-banner" style="margin-top: auto; padding: 10px 14px; flex-direction: column; gap: 8px;">
+            <div class="active-turn-text" id="active-turn-display" style="font-size: 0.85rem; text-align: center;">
               Aguardando início...
             </div>
-            <button class="btn btn-primary" id="btn-next-turn" style="padding: 8px 16px; font-size: 0.85rem;">
+            <button class="btn btn-primary" id="btn-next-turn" style="width: 100%; padding: 6px 12px; font-size: 0.8rem;">
               Passar Turno ⏩
             </button>
           </div>
+        </aside>
 
-          <!-- Interactive 3D Dice Stage -->
-          <div class="dice-stage">
-            <div class="dice-display-3d">
-              <div class="dice-cube" id="dice-cube">
-                20
-              </div>
+        <!-- Center Stage: Interactive Tabletop Canvas Board -->
+        <section class="tabletop-wrapper">
+          <div class="tabletop-topbar">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">
+              🔍 <strong>Scrolle</strong> para Zoom | <strong>Arraste</strong> para mover o mapa/tokens
             </div>
-
-            <!-- Dice Selector Controls -->
-            <div class="dice-selector">
-              <button class="dice-btn" data-dice="d4">d4</button>
-              <button class="dice-btn" data-dice="d6">d6</button>
-              <button class="dice-btn" data-dice="d8">d8</button>
-              <button class="dice-btn" data-dice="d10">d10</button>
-              <button class="dice-btn" data-dice="d12">d12</button>
-              <button class="dice-btn selected" data-dice="d20">d20</button>
-              <button class="dice-btn" data-dice="d100">d100</button>
-            </div>
-
-            <button class="btn btn-gold" id="btn-roll-dice" style="margin-top: 20px; font-size: 1.1rem; padding: 14px 36px;">
-              🎲 Rolar Dado
+            <button class="btn btn-secondary" id="btn-center-board" style="padding: 4px 10px; font-size: 0.8rem;">
+              🎯 Centralizar Visão
             </button>
+          </div>
+
+          <!-- Canvas Container -->
+          <div class="tabletop-canvas-container" id="tabletop-canvas-container">
+            <!-- Rendered dynamically by boardEngine -->
           </div>
         </section>
 
-        <!-- Right Sidebar: Synchronized Dice Roll Feed -->
-        <aside class="glass-panel log-panel" style="padding: 20px;">
-          <div class="panel-header">
-            <h3 style="font-size: 1.1rem;">📜 Histórico de Jogadas</h3>
+        <!-- Right Sidebar: Tabbed Control Menu -->
+        <aside class="glass-panel sidebar-right" style="padding: 16px;">
+          
+          <!-- Menu Tabs -->
+          <div class="menu-tabs">
+            <button class="menu-tab-btn active" data-tab="map">🗺️ Mapa</button>
+            <button class="menu-tab-btn" data-tab="tokens">👾 Tokens</button>
+            <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
-          <div class="log-feed" id="vtt-roll-log">
-            <!-- Rendered by JS -->
+          <!-- TAB 1: Map & Grid Settings -->
+          <div class="tab-pane" id="tab-pane-map">
+            <div id="master-board-controls">
+              <h4 style="margin-bottom: 12px; font-size: 0.95rem;">👑 Configurações do Grid (Mestre)</h4>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="grid-cols-input">Colunas</label>
+                  <input type="number" id="grid-cols-input" class="form-control" value="20" min="5" max="60" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="grid-rows-input">Linhas</label>
+                  <input type="number" id="grid-rows-input" class="form-control" value="15" min="5" max="60" />
+                </div>
+              </div>
+
+              <button class="btn btn-secondary" id="btn-update-grid" style="width: 100%; margin-bottom: 16px; font-size: 0.85rem;">
+                Atualizar Tamanho do Grid
+              </button>
+
+              <h4 style="margin-bottom: 8px; font-size: 0.95rem;">🖼️ Imagem de Fundo do Mapa</h4>
+              <div class="form-group">
+                <input type="file" id="map-file-input" accept="image/*" class="form-control" style="font-size: 0.8rem; padding: 8px;" />
+              </div>
+
+              <button class="btn btn-danger" id="btn-remove-map" style="width: 100%; margin-bottom: 16px; font-size: 0.8rem; padding: 6px;">
+                Remover Imagem de Fundo
+              </button>
+            </div>
+
+            <!-- Preset Maps -->
+            <h4 style="margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted);">Mapas Pré-definidos</h4>
+            <div class="preset-maps-grid">
+              <div class="preset-map-card" data-map-url="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=600" style="background-image: url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=200');">
+                <div class="preset-map-label">Mesa de Madeira</div>
+              </div>
+              <div class="preset-map-card" data-map-url="https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=600" style="background-image: url('https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=200');">
+                <div class="preset-map-label">Floresta Sombria</div>
+              </div>
+              <div class="preset-map-card" data-map-url="https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=600" style="background-image: url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=200');">
+                <div class="preset-map-label">Masmorra Dourada</div>
+              </div>
+              <div class="preset-map-card" data-map-url="https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=600" style="background-image: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=200');">
+                <div class="preset-map-label">Vale Encantado</div>
+              </div>
+            </div>
           </div>
+
+          <!-- TAB 2: Tokens Spawner -->
+          <div class="tab-pane hidden" id="tab-pane-tokens">
+            <h4 style="margin-bottom: 8px; font-size: 0.95rem;">⚡ Inserir Novo Token</h4>
+            
+            <form id="form-spawn-token">
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label for="token-name-input">Nome da Criatura / Jogador</label>
+                <input type="text" id="token-name-input" name="tokenName" class="form-control" placeholder="Ex: Golem de Pedra" required style="font-size: 0.85rem;" />
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>Emoji / Ícone</label>
+                  <select name="tokenAvatar" class="form-control" style="font-size: 0.85rem;">
+                    <option value="⚔️">⚔️ Guerreiro</option>
+                    <option value="🧙‍♂️">🧙‍♂️ Mago</option>
+                    <option value="🧝‍♀️">🧝‍♀️ Elfa</option>
+                    <option value="🛡️">🛡️ Paladino</option>
+                    <option value="🏹">🏹 Arqueiro</option>
+                    <option value="🐉">🐉 Dragão</option>
+                    <option value="👹">👹 Ogro</option>
+                    <option value="👺">👺 Goblin</option>
+                    <option value="🧟">🧟 Zumbi</option>
+                    <option value="🐺">🐺 Lobo</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label>Cor do Anel</label>
+                  <input type="color" name="tokenColor" class="form-control" value="#8b5cf6" style="height: 38px; padding: 2px;" />
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-gold" style="width: 100%; margin-bottom: 16px; font-size: 0.85rem;">
+                ➕ Inserir Token no Grid
+              </button>
+            </form>
+
+            <h4 style="margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted);">Tokens Rápidos</h4>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <button class="btn btn-secondary quick-token-btn" data-name="Mago" data-avatar="🧙‍♂️" data-color="#8b5cf6" style="justify-content: flex-start; font-size: 0.85rem; padding: 6px 10px;">
+                🧙‍♂️ Mago Aliado
+              </button>
+              <button class="btn btn-secondary quick-token-btn" data-name="Dragão" data-avatar="🐉" data-color="#ef4444" style="justify-content: flex-start; font-size: 0.85rem; padding: 6px 10px;">
+                🐉 Dragão Inimigo
+              </button>
+              <button class="btn btn-secondary quick-token-btn" data-name="Goblin" data-avatar="👺" data-color="#10b981" style="justify-content: flex-start; font-size: 0.85rem; padding: 6px 10px;">
+                👺 Goblin Inimigo
+              </button>
+            </div>
+          </div>
+
+          <!-- TAB 3: Dice Roller & Roll Log -->
+          <div class="tab-pane hidden" id="tab-pane-dice">
+            <!-- Dice Stage -->
+            <div class="dice-stage" style="min-height: 200px;">
+              <div class="dice-display-3d" style="width: 100px; height: 100px; margin-bottom: 12px;">
+                <div class="dice-cube" id="dice-cube" style="width: 80px; height: 80px; font-size: 2.2rem;">
+                  20
+                </div>
+              </div>
+
+              <!-- Dice Selector Controls -->
+              <div class="dice-selector" style="padding: 10px; gap: 8px;">
+                <button class="dice-btn" data-dice="d4" style="width: 40px; height: 40px; font-size: 0.8rem;">d4</button>
+                <button class="dice-btn" data-dice="d6" style="width: 40px; height: 40px; font-size: 0.8rem;">d6</button>
+                <button class="dice-btn" data-dice="d8" style="width: 40px; height: 40px; font-size: 0.8rem;">d8</button>
+                <button class="dice-btn" data-dice="d10" style="width: 40px; height: 40px; font-size: 0.8rem;">d10</button>
+                <button class="dice-btn" data-dice="d12" style="width: 40px; height: 40px; font-size: 0.8rem;">d12</button>
+                <button class="dice-btn selected" data-dice="d20" style="width: 40px; height: 40px; font-size: 0.8rem;">d20</button>
+                <button class="dice-btn" data-dice="d100" style="width: 40px; height: 40px; font-size: 0.8rem;">d100</button>
+              </div>
+
+              <button class="btn btn-gold" id="btn-roll-dice" style="margin-top: 12px; font-size: 0.95rem; width: 100%; padding: 10px;">
+                🎲 Rolar Dado
+              </button>
+            </div>
+
+            <!-- Roll Feed -->
+            <div class="log-panel" style="margin-top: 12px; flex: 1;">
+              <h4 style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px;">📜 Feed de Dados</h4>
+              <div class="log-feed" id="vtt-roll-log">
+                <!-- Rendered by JS -->
+              </div>
+            </div>
+          </div>
+
         </aside>
 
       </div>

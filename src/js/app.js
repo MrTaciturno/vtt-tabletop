@@ -3,6 +3,7 @@ import { auth } from './auth.js';
 import { ui } from './ui.js';
 import { lobbyManager } from './lobby.js';
 import { diceEngine } from './dice.js';
+import { boardEngine } from './board.js';
 
 /**
  * Main Application Initializer
@@ -32,5 +33,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  console.log('⚔️ Virtual Tabletop Initialized Successfully!');
+  console.log('⚔️ Virtual Tabletop & Interactive Board Engine Initialized!');
 });

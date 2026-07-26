@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { auth } from './auth.js';
 import { lobbyManager } from './lobby.js';
 import { diceEngine } from './dice.js';
+import { boardEngine } from './board.js';
 
 /**
  * UI Renderer & DOM Controller
@@ -156,6 +157,81 @@ class UIController {
       lobbyManager.advanceTurn();
     });
 
+    // Right Menu Tabs
+    document.querySelectorAll('.menu-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetTab = e.currentTarget.dataset.tab;
+        document.querySelectorAll('.menu-tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+
+        e.currentTarget.classList.add('active');
+        document.getElementById(`tab-pane-${targetTab}`)?.classList.remove('hidden');
+      });
+    });
+
+    // Board & Map Controls (Master)
+    document.getElementById('btn-update-grid')?.addEventListener('click', () => {
+      const cols = parseInt(document.getElementById('grid-cols-input')?.value, 10) || 20;
+      const rows = parseInt(document.getElementById('grid-rows-input')?.value, 10) || 15;
+      boardEngine.setGridSize(cols, rows, true);
+      this.showToast(`Grid atualizado para ${cols}x${rows}`, 'info');
+    });
+
+    document.getElementById('btn-center-board')?.addEventListener('click', () => {
+      boardEngine.centerView();
+    });
+
+    // Map Background Image Upload
+    document.getElementById('map-file-input')?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target.result;
+          boardEngine.setBackgroundImage(dataUrl, true);
+          this.showToast('Mapa de fundo carregado!', 'success');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById('btn-remove-map')?.addEventListener('click', () => {
+      boardEngine.setBackgroundImage(null, true);
+      this.showToast('Mapa de fundo removido.', 'info');
+    });
+
+    // Preset Maps
+    document.querySelectorAll('.preset-map-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const mapUrl = e.currentTarget.dataset.mapUrl;
+        boardEngine.setBackgroundImage(mapUrl, true);
+        this.showToast('Mapa selecionado!', 'info');
+      });
+    });
+
+    // Token Spawner
+    document.getElementById('form-spawn-token')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = e.target.tokenName.value || 'Token';
+      const avatar = e.target.tokenAvatar.value || '🛡️';
+      const color = e.target.tokenColor.value || '#8b5cf6';
+
+      boardEngine.addToken(name, avatar, color, state.currentUser?.id, true);
+      this.showToast(`Token '${name}' adicionado ao tabuleiro!`, 'success');
+      e.target.reset();
+    });
+
+    // Quick Spawn Presets
+    document.querySelectorAll('.quick-token-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const name = e.currentTarget.dataset.name;
+        const avatar = e.currentTarget.dataset.avatar;
+        const color = e.currentTarget.dataset.color;
+        boardEngine.addToken(name, avatar, color, state.currentUser?.id, true);
+        this.showToast(`Token '${name}' adicionado!`, 'success');
+      });
+    });
+
     // Dice Roll Controls
     document.querySelectorAll('.dice-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -260,6 +336,11 @@ class UIController {
       this.renderPlayers();
       this.renderTurnBanner();
       this.renderRollLog();
+
+      // Initialize or resize board engine
+      setTimeout(() => {
+        boardEngine.init('tabletop-canvas-container');
+      }, 50);
     }
   }
 
@@ -272,6 +353,13 @@ class UIController {
 
     if (titleEl) titleEl.textContent = lobby.name;
     if (codeEl) codeEl.textContent = lobby.code;
+
+    // Show/Hide Master controls based on role
+    const isMaster = state.currentUser?.isMaster || lobby.masterId === state.currentUser?.id;
+    const masterControls = document.getElementById('master-board-controls');
+    if (masterControls) {
+      masterControls.style.display = isMaster ? 'block' : 'none';
+    }
   }
 
   renderPlayers() {
@@ -321,7 +409,7 @@ class UIController {
     if (activePlayer && bannerText) {
       const isMyTurn = state.currentUser && state.currentUser.id === activePlayer.id;
       bannerText.innerHTML = isMyTurn ? 
-        `<span style="color: var(--accent-success);">🎯 SEU TURNO!</span> Faça a sua jogada.` :
+        `<span style="color: var(--accent-success);">🎯 SEU TURNO!</span> Mova seu token ou role os dados.` :
         `Turno de <strong>${activePlayer.username}</strong> ${activePlayer.avatar}`;
     }
 

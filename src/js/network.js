@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { auth } from './auth.js';
+import { boardEngine } from './board.js';
 
 /**
  * Universal WebSocket Network Engine (MQTT over Secure WSS)
@@ -66,7 +67,6 @@ class NetworkEngine {
           if (!err) {
             console.log(`[WebSocket] Inscrito no tópico da sala: ${topic}`);
 
-            // If joining as Player, announce presence
             const currentUser = state.currentUser || { id: 'anon_' + Date.now(), username: 'Anon', avatar: '🎲' };
             const playerPayload = {
               id: currentUser.id,
@@ -80,6 +80,11 @@ class NetworkEngine {
             // If Host, announce room availability
             if (this.isHost) {
               this.broadcast('SYNC_PLAYERS', state.players);
+              this.broadcast('BOARD_CONFIG_CHANGED', {
+                cols: boardEngine.cols,
+                rows: boardEngine.rows,
+                bgImageUrl: boardEngine.bgImageUrl
+              });
             }
           }
         });
@@ -145,7 +150,6 @@ class NetworkEngine {
   handleMessage(message) {
     if (!message || !message.type) return;
 
-    // Ignore self-published messages if already processed locally
     const currentUserId = state.currentUser ? state.currentUser.id : null;
     
     switch (message.type) {
@@ -163,11 +167,16 @@ class NetworkEngine {
 
         state.setPlayers(updatedPlayers);
 
-        // If I am the Master, broadcast full state sync back to all players
         if (this.isHost && message.sender !== currentUserId) {
           this.broadcast('SYNC_FULL_STATE', {
             players: updatedPlayers,
-            turnIndex: state.currentTurnIndex
+            turnIndex: state.currentTurnIndex,
+            board: {
+              cols: boardEngine.cols,
+              rows: boardEngine.rows,
+              bgImageUrl: boardEngine.bgImageUrl,
+              tokens: boardEngine.tokens
+            }
           });
         }
         break;
@@ -187,6 +196,45 @@ class NetworkEngine {
           if (typeof message.payload.turnIndex === 'number') {
             state.setTurnIndex(message.payload.turnIndex);
           }
+          if (message.payload.board) {
+            const b = message.payload.board;
+            if (b.cols && b.rows) boardEngine.setGridSize(b.cols, b.rows, false);
+            if (b.bgImageUrl !== undefined) boardEngine.setBackgroundImage(b.bgImageUrl, false);
+            if (Array.isArray(b.tokens)) {
+              boardEngine.tokens = b.tokens;
+              boardEngine.render();
+            }
+          }
+        }
+        break;
+
+      case 'BOARD_CONFIG_CHANGED':
+        if (message.payload && message.sender !== currentUserId) {
+          if (message.payload.cols && message.payload.rows) {
+            boardEngine.setGridSize(message.payload.cols, message.payload.rows, false);
+          }
+          if (message.payload.bgImageUrl !== undefined) {
+            boardEngine.setBackgroundImage(message.payload.bgImageUrl, false);
+          }
+        }
+        break;
+
+      case 'TOKEN_SPAWNED':
+        if (message.payload && message.sender !== currentUserId) {
+          boardEngine.tokens.push(message.payload);
+          boardEngine.render();
+        }
+        break;
+
+      case 'TOKEN_MOVED':
+        if (message.payload && message.sender !== currentUserId) {
+          boardEngine.moveToken(message.payload.id, message.payload.x, message.payload.y, false);
+        }
+        break;
+
+      case 'TOKEN_DELETED':
+        if (message.payload && message.sender !== currentUserId) {
+          boardEngine.deleteToken(message.payload.id, false);
         }
         break;
 
