@@ -363,8 +363,8 @@ class UIController {
 
           <div style="display: flex; gap: 4px; align-items: center;">
             <div class="turn-reorder-btns">
-              <button class="turn-btn" title="Mover para cima" onclick="window.vttApp.reorderTurn(${index}, -1)">▲</button>
-              <button class="turn-btn" title="Mover para baixo" onclick="window.vttApp.reorderTurn(${index}, 1)">▼</button>
+              <button type="button" class="turn-btn" title="Mover para cima" onclick="window.vttApp.reorderTurn(${index}, -1)">▲</button>
+              <button type="button" class="turn-btn" title="Mover para baixo" onclick="window.vttApp.reorderTurn(${index}, 1)">▼</button>
             </div>
             ${isCurrentUserMaster && p.id !== state.currentUser.id ? `
               <button class="btn-icon" style="padding: 2px 4px; font-size: 0.65rem; color: #ef4444;" onclick="window.vttApp.kick('${p.id}')">✕</button>

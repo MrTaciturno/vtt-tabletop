@@ -10,8 +10,6 @@ import { boardEngine } from './board.js';
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  ui.init();
-
   window.vttApp = {
     reorderTurn: (fromIndex, direction) => {
       lobbyManager.movePlayerTurn(fromIndex, direction);
@@ -33,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   };
+
+  ui.init();
 
   console.log('⚔️ Virtual Tabletop Initialized!');
 });

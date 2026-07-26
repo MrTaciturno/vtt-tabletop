@@ -88,8 +88,16 @@ class LobbyManager {
   }
 
   movePlayerTurn(fromIndex, direction) {
-    const toIndex = fromIndex + direction;
-    if (toIndex < 0 || toIndex >= state.players.length) return;
+    if (!state.players || state.players.length < 2) return;
+
+    const total = state.players.length;
+    let toIndex = (fromIndex + direction) % total;
+    if (toIndex < 0) toIndex += total;
+
+    if (toIndex === fromIndex) return;
+
+    const activePlayer = state.players[state.currentTurnIndex];
+    const activePlayerId = activePlayer ? activePlayer.id : null;
 
     const updated = [...state.players];
     const [moved] = updated.splice(fromIndex, 1);
@@ -97,8 +105,18 @@ class LobbyManager {
 
     state.setPlayers(updated);
 
+    if (activePlayerId) {
+      const newTurnIndex = updated.findIndex(p => p.id === activePlayerId);
+      if (newTurnIndex !== -1 && newTurnIndex !== state.currentTurnIndex) {
+        state.setTurnIndex(newTurnIndex);
+      }
+    }
+
     // Broadcast reordered turn positions to all clients
-    network.broadcast('REORDER_PLAYERS', updated);
+    network.broadcast('REORDER_PLAYERS', {
+      players: updated,
+      turnIndex: state.currentTurnIndex
+    });
   }
 
   grantMasterPrivilege(targetUserId, makeMaster = true) {

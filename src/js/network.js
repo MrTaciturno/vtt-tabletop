@@ -224,6 +224,13 @@ class NetworkEngine {
       case 'REORDER_PLAYERS':
         if (Array.isArray(message.payload)) {
           state.setPlayers(message.payload);
+        } else if (message.payload && typeof message.payload === 'object') {
+          if (Array.isArray(message.payload.players)) {
+            state.setPlayers(message.payload.players);
+          }
+          if (typeof message.payload.turnIndex === 'number') {
+            state.setTurnIndex(message.payload.turnIndex);
+          }
         }
         break;
 
