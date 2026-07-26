@@ -3,7 +3,7 @@ import { network } from './network.js';
 import { ui } from './ui.js';
 
 /**
- * Interactive Tabletop Board Engine (Pan, Zoom, Grid & Token Dragging)
+ * Interactive Tabletop Board Engine (Pan, Zoom, Expanded Grid & Character Sheets)
  */
 
 class BoardEngine {
@@ -12,16 +12,30 @@ class BoardEngine {
     this.canvas = null;
     this.ctx = null;
     
-    // Grid & Map Properties
-    this.cols = 20;
-    this.rows = 15;
+    // Minimum Map Dimensions (17 cols x 22 rows)
+    this.MIN_MAP_COLS = 17;
+    this.MIN_MAP_ROWS = 22;
+
+    // Surrounding Outer Grid Margins
+    this.outerLeft = 17;
+    this.outerRight = 17;
+    this.outerTop = 22;
+    this.outerBottom = 22;
+
+    // Central Map Configured Dimensions
+    this.cols = 20; // Configured map cols
+    this.rows = 15; // Configured map rows
+
     this.cellSize = 50; // Base cell size in pixels
     this.bgImage = null;
     this.bgImageUrl = null;
 
+    // Loaded Sheet Images Cache { [slotIndex]: HTMLImageElement }
+    this.sheetImageCache = {};
+
     // Viewport Transform (Pan & Zoom)
-    this.scale = 1;
-    this.minScale = 0.4;
+    this.scale = 0.8;
+    this.minScale = 0.2;
     this.maxScale = 3.0;
     this.panX = 0;
     this.panY = 0;
@@ -32,11 +46,52 @@ class BoardEngine {
     // Token Management
     this.tokens = []; // Array of { id, name, avatar, color, ownerId, x, y }
     this.draggedToken = null;
-    this.dragOffsetGridX = 0;
-    this.dragOffsetGridY = 0;
 
     // Bindings
     this.onResize = this.resize.bind(this);
+  }
+
+  // Active Map Dimensions (enforcing minimum 17x22)
+  get mapCols() {
+    return Math.max(this.MIN_MAP_COLS, this.cols || 17);
+  }
+
+  get mapRows() {
+    return Math.max(this.MIN_MAP_ROWS, this.rows || 22);
+  }
+
+  // Total Grid Dimensions (Outer Margins + Map)
+  get mapOriginX() {
+    return this.outerLeft;
+  }
+
+  get mapOriginY() {
+    return this.outerTop;
+  }
+
+  get totalCols() {
+    return this.outerLeft + this.mapCols + this.outerRight;
+  }
+
+  get totalRows() {
+    return this.outerTop + this.mapRows + this.outerBottom;
+  }
+
+  // Defined 17x22 Character Sheet Slots around the Central Map
+  getSlots() {
+    const mapX = this.mapOriginX;
+    const mapY = this.mapOriginY;
+    const mapCols = this.mapCols;
+    const mapRows = this.mapRows;
+
+    return [
+      { id: 0, label: 'Planilha 1 (Esq. Sup)', x: 0, y: 0, cols: 17, rows: 22 },
+      { id: 1, label: 'Planilha 2 (Esq. Inf)', x: 0, y: 22, cols: 17, rows: 22 },
+      { id: 2, label: 'Planilha 3 (Dir. Sup)', x: mapX + mapCols, y: 0, cols: 17, rows: 22 },
+      { id: 3, label: 'Planilha 4 (Dir. Inf)', x: mapX + mapCols, y: 22, cols: 17, rows: 22 },
+      { id: 4, label: 'Planilha 5 (Topo)', x: mapX, y: 0, cols: 17, rows: 22 },
+      { id: 5, label: 'Planilha 6 (Base)', x: mapX, y: mapY + mapRows, cols: 17, rows: 22 }
+    ];
   }
 
   init(containerId) {
@@ -55,8 +110,31 @@ class BoardEngine {
     this.centerView();
     this.bindEvents();
 
-    // Redraw loop
+    state.subscribe((event) => {
+      if (event === 'SHEETS_CHANGED') {
+        this.preloadSheetImages();
+        this.render();
+      }
+    });
+
     this.render();
+  }
+
+  preloadSheetImages() {
+    const sheets = state.characterSheets || {};
+    Object.keys(sheets).forEach(slotId => {
+      const sheet = sheets[slotId];
+      if (sheet && sheet.imageUrl) {
+        if (!this.sheetImageCache[slotId] || this.sheetImageCache[slotId].src !== sheet.imageUrl) {
+          const img = new Image();
+          img.onload = () => this.render();
+          img.src = sheet.imageUrl;
+          this.sheetImageCache[slotId] = img;
+        }
+      } else {
+        delete this.sheetImageCache[slotId];
+      }
+    });
   }
 
   resize() {
@@ -67,10 +145,22 @@ class BoardEngine {
   }
 
   centerView() {
-    const boardWidth = this.cols * this.cellSize;
-    const boardHeight = this.rows * this.cellSize;
-    this.panX = (this.canvas.width - boardWidth * this.scale) / 2;
-    this.panY = (this.canvas.height - boardHeight * this.scale) / 2;
+    if (!this.canvas) return;
+    const mapCenterX = (this.mapOriginX + this.mapCols / 2) * this.cellSize;
+    const mapCenterY = (this.mapOriginY + this.mapRows / 2) * this.cellSize;
+    this.panX = this.canvas.width / 2 - mapCenterX * this.scale;
+    this.panY = this.canvas.height / 2 - mapCenterY * this.scale;
+    this.render();
+  }
+
+  focusSlot(slotId) {
+    const slot = this.getSlots().find(s => s.id === Number(slotId));
+    if (!slot || !this.canvas) return;
+
+    const slotCenterX = (slot.x + slot.cols / 2) * this.cellSize;
+    const slotCenterY = (slot.y + slot.rows / 2) * this.cellSize;
+    this.panX = this.canvas.width / 2 - slotCenterX * this.scale;
+    this.panY = this.canvas.height / 2 - slotCenterY * this.scale;
     this.render();
   }
 
@@ -78,10 +168,10 @@ class BoardEngine {
     this.cols = Math.max(5, Math.min(60, cols));
     this.rows = Math.max(5, Math.min(60, rows));
 
-    // Ensure tokens remain inside bounds
+    // Ensure tokens remain inside total bounds
     this.tokens.forEach(t => {
-      if (t.x >= this.cols) t.x = this.cols - 1;
-      if (t.y >= this.rows) t.y = this.rows - 1;
+      if (t.x >= this.totalCols) t.x = this.totalCols - 1;
+      if (t.y >= this.totalRows) t.y = this.totalRows - 1;
     });
 
     this.render();
@@ -127,12 +217,29 @@ class BoardEngine {
     }
   }
 
+  setSheetImage(slotId, imageUrl, broadcast = true) {
+    const currentUser = state.currentUser || { id: 'anon', username: 'Jogador' };
+    const sheetData = {
+      slotId: Number(slotId),
+      ownerId: currentUser.id,
+      ownerName: currentUser.username,
+      imageUrl,
+      updatedAt: Date.now()
+    };
+
+    state.updateCharacterSheet(slotId, sheetData);
+
+    if (broadcast) {
+      network.broadcast('SHEET_UPDATED', sheetData);
+    }
+  }
+
   addToken(name, avatar, color = '#8b5cf6', ownerId = null, broadcast = true) {
     const tokenId = 'tok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     
-    // Find empty cell or place near center
-    const x = Math.floor(this.cols / 2);
-    const y = Math.floor(this.rows / 2);
+    // Spawn near center of central map
+    const x = this.mapOriginX + Math.floor(this.mapCols / 2);
+    const y = this.mapOriginY + Math.floor(this.mapRows / 2);
 
     const token = {
       id: tokenId,
@@ -156,8 +263,8 @@ class BoardEngine {
   moveToken(tokenId, x, y, broadcast = true) {
     const token = this.tokens.find(t => t.id === tokenId);
     if (token) {
-      token.x = Math.max(0, Math.min(this.cols - 1, x));
-      token.y = Math.max(0, Math.min(this.rows - 1, y));
+      token.x = Math.max(0, Math.min(this.totalCols - 1, x));
+      token.y = Math.max(0, Math.min(this.totalRows - 1, y));
       this.render();
 
       if (broadcast) {
@@ -175,7 +282,6 @@ class BoardEngine {
     }
   }
 
-  // Mouse & Touch Event Handlers for Pan, Zoom & Dragging
   bindEvents() {
     window.addEventListener('resize', this.onResize);
 
@@ -187,7 +293,6 @@ class BoardEngine {
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
       const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * zoomFactor));
       
-      // Zoom centered at mouse cursor
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
@@ -205,18 +310,15 @@ class BoardEngine {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Check if clicking a token
       const gridPos = this.screenToGrid(mouseX, mouseY);
       const clickedToken = this.tokens.slice().reverse().find(t => t.x === gridPos.x && t.y === gridPos.y);
 
-      // Permission check: Master can drag all tokens, Player can drag owned tokens
       const isMaster = state.currentUser?.isMaster || state.activeLobby?.masterId === state.currentUser?.id;
       const canDrag = clickedToken && (isMaster || clickedToken.ownerId === state.currentUser?.id);
 
       if (canDrag) {
         this.draggedToken = clickedToken;
       } else {
-        // Start Board Panning
         this.isPanning = true;
         this.startPanX = e.clientX - this.panX;
         this.startPanY = e.clientY - this.panY;
@@ -272,71 +374,141 @@ class BoardEngine {
     ctx.translate(this.panX, this.panY);
     ctx.scale(this.scale, this.scale);
 
-    const boardWidth = this.cols * this.cellSize;
-    const boardHeight = this.rows * this.cellSize;
+    const totalW = this.totalCols * this.cellSize;
+    const totalH = this.totalRows * this.cellSize;
 
-    // 1. Draw Background Image if loaded
+    const mapX = this.mapOriginX * this.cellSize;
+    const mapY = this.mapOriginY * this.cellSize;
+    const mapW = this.mapCols * this.cellSize;
+    const mapH = this.mapRows * this.cellSize;
+
+    // 0. Tabletop Outer Felt / Wood Background
+    ctx.fillStyle = '#0b111e';
+    ctx.fillRect(0, 0, totalW, totalH);
+
+    // 1. Draw Central Map Background Area
     if (this.bgImage) {
-      ctx.drawImage(this.bgImage, 0, 0, boardWidth, boardHeight);
+      // Anchored at top-left corner of the central map grid
+      ctx.drawImage(this.bgImage, mapX, mapY, mapW, mapH);
     } else {
-      // Dark wood / tabletop texture background
       ctx.fillStyle = '#151d2a';
-      ctx.fillRect(0, 0, boardWidth, boardHeight);
+      ctx.fillRect(mapX, mapY, mapW, mapH);
     }
 
-    // 2. Draw Square Grid Overlay
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    // 2. Draw Character Sheet Slot Rectangles (17x22 each)
+    const slots = this.getSlots();
+    const sheets = state.characterSheets || {};
+
+    slots.forEach(slot => {
+      const slotPixelX = slot.x * this.cellSize;
+      const slotPixelY = slot.y * this.cellSize;
+      const slotPixelW = slot.cols * this.cellSize;
+      const slotPixelH = slot.rows * this.cellSize;
+
+      const sheet = sheets[slot.id];
+      const cachedImg = this.sheetImageCache[slot.id];
+
+      if (cachedImg) {
+        // Draw uploaded sheet image inside 17x22 rectangle
+        ctx.drawImage(cachedImg, slotPixelX, slotPixelY, slotPixelW, slotPixelH);
+      } else {
+        // Draw empty slot background placeholder
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+        ctx.fillRect(slotPixelX, slotPixelY, slotPixelW, slotPixelH);
+
+        // Dashed border for empty slot
+        ctx.strokeStyle = 'rgba(234, 179, 8, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.strokeRect(slotPixelX + 4, slotPixelY + 4, slotPixelW - 8, slotPixelH - 8);
+        ctx.setLineDash([]);
+
+        // Slot Label Text
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillStyle = 'rgba(234, 179, 8, 0.8)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`📋 ${slot.label}`, slotPixelX + slotPixelW / 2, slotPixelY + slotPixelH / 2 - 10);
+
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillText('Retângulo 17x22 (Vaga de Planilha)', slotPixelX + slotPixelW / 2, slotPixelY + slotPixelH / 2 + 15);
+      }
+
+      // Slot Outer Border Glow
+      ctx.strokeStyle = sheet ? 'rgba(34, 197, 94, 0.8)' : 'rgba(234, 179, 8, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(slotPixelX, slotPixelY, slotPixelW, slotPixelH);
+
+      // Header Tag for Owner/Slot Name
+      ctx.fillStyle = sheet ? 'rgba(34, 197, 94, 0.9)' : 'rgba(234, 179, 8, 0.9)';
+      ctx.fillRect(slotPixelX, slotPixelY, slotPixelW, 26);
+
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const titleText = sheet ? `📋 Planilha: ${sheet.ownerName}` : `📋 ${slot.label} (17x22)`;
+      ctx.fillText(titleText, slotPixelX + 10, slotPixelY + 13);
+    });
+
+    // 3. Draw Complete Square Grid Overlay (Entire Board)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
 
-    for (let c = 0; c <= this.cols; c++) {
+    for (let c = 0; c <= this.totalCols; c++) {
       ctx.beginPath();
       ctx.moveTo(c * this.cellSize, 0);
-      ctx.lineTo(c * this.cellSize, boardHeight);
+      ctx.lineTo(c * this.cellSize, totalH);
       ctx.stroke();
     }
 
-    for (let r = 0; r <= this.rows; r++) {
+    for (let r = 0; r <= this.totalRows; r++) {
       ctx.beginPath();
       ctx.moveTo(0, r * this.cellSize);
-      ctx.lineTo(boardWidth, r * this.cellSize);
+      ctx.lineTo(totalW, r * this.cellSize);
       ctx.stroke();
     }
 
-    // Outer Board Border Glow
-    ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(0, 0, boardWidth, boardHeight);
+    // Central Map Border Glow
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.8)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(mapX, mapY, mapW, mapH);
 
-    // 3. Draw Tokens
+    // Central Map Header Label Tag
+    ctx.fillStyle = 'rgba(139, 92, 246, 0.9)';
+    ctx.fillRect(mapX, mapY - 26 < 0 ? mapY : mapY - 26, 180, 26);
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`🗺️ Mapa Central (${this.mapCols}x${this.mapRows})`, mapX + 90, (mapY - 26 < 0 ? mapY : mapY - 26) + 13);
+
+    // 4. Draw Tokens
     this.tokens.forEach(t => {
       const centerX = t.x * this.cellSize + this.cellSize / 2;
       const centerY = t.y * this.cellSize + this.cellSize / 2;
       const radius = (this.cellSize / 2) * 0.8;
 
-      // Token Shadow
       ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
       ctx.shadowBlur = 10;
 
-      // Token Base Circle
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
       ctx.fillStyle = t.color || '#8b5cf6';
       ctx.fill();
 
-      // Token Border
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = '#ffffff';
       ctx.stroke();
 
       ctx.shadowColor = 'transparent';
 
-      // Token Avatar Emoji / Icon
       ctx.font = `${radius * 1.1}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(t.avatar || '🎲', centerX, centerY + 2);
 
-      // Token Name Label
       ctx.font = 'bold 10px sans-serif';
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#000000';

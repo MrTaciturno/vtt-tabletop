@@ -10,6 +10,7 @@ class AppState {
     this.currentTurnIndex = 0;
     this.diceHistory = [];   // Array of { id, player, diceType, result, timestamp, isNat20, isNat1 }
     this.selectedDice = 'd20';
+    this.characterSheets = {}; // { [slotIndex]: { id, ownerId, ownerName, imageUrl } }
     this.listeners = new Set();
   }
 
@@ -49,6 +50,16 @@ class AppState {
       this.activeLobby.turnIndex = index;
     }
     this.notify('TURN_CHANGED', index);
+  }
+
+  setCharacterSheets(sheets) {
+    this.characterSheets = sheets || {};
+    this.notify('SHEETS_CHANGED', this.characterSheets);
+  }
+
+  updateCharacterSheet(slotIndex, sheetData) {
+    this.characterSheets[slotIndex] = sheetData;
+    this.notify('SHEETS_CHANGED', this.characterSheets);
   }
 
   addDiceRoll(rollData) {

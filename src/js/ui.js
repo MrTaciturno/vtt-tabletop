@@ -186,6 +186,28 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
+    // Character Sheet Controls
+    document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+      if (file) {
+        this.showToast('Processando imagem da planilha...', 'info');
+        this.compressMapImage(file, (optimizedDataUrl) => {
+          boardEngine.setSheetImage(slotId, optimizedDataUrl, true);
+          this.showToast('Planilha atualizada e exibida na mesa!', 'success');
+        });
+      }
+    });
+
+    document.getElementById('btn-focus-sheet')?.addEventListener('click', () => {
+      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+      boardEngine.focusSlot(slotId);
+    });
+
+    document.getElementById('btn-focus-map')?.addEventListener('click', () => {
+      boardEngine.centerView();
+    });
+
     // Token Spawner
     document.getElementById('form-spawn-token')?.addEventListener('submit', (e) => {
       e.preventDefault();

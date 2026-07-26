@@ -172,8 +172,41 @@
           <!-- Menu Tabs -->
           <div class="menu-tabs">
             <button class="menu-tab-btn active" data-tab="map">🗺️ Mapa</button>
+            <button class="menu-tab-btn" data-tab="sheets">📋 Planilhas</button>
             <button class="menu-tab-btn" data-tab="tokens">👾 Tokens</button>
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
+          </div>
+
+          <!-- TAB: Character Sheets (Planilhas 17x22) -->
+          <div class="tab-pane hidden" id="tab-pane-sheets">
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem;">📋 Adicionar Imagem da Planilha</h4>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em retângulos de 17x22.</p>
+            
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga de Planilha</label>
+              <select id="sheet-slot-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                <option value="0">📋 Planilha 1 (Esquerda Sup)</option>
+                <option value="1">📋 Planilha 2 (Esquerda Inf)</option>
+                <option value="2">📋 Planilha 3 (Direita Sup)</option>
+                <option value="3">📋 Planilha 4 (Direita Inf)</option>
+                <option value="4">📋 Planilha 5 (Topo Central)</option>
+                <option value="5">📋 Planilha 6 (Base Central)</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 0.75rem;">Imagem da Planilha (JPG/PNG)</label>
+              <input type="file" id="sheet-file-input" accept="image/*" class="form-control" style="font-size: 0.75rem; padding: 6px;" />
+            </div>
+
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                🎯 Focar na Planilha
+              </button>
+              <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                🗺️ Focar no Mapa
+              </button>
+            </div>
           </div>
 
           <!-- TAB 1: Map & Grid Settings (Master Only) -->

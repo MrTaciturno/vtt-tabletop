@@ -114,6 +114,7 @@ class NetworkEngine {
         this.broadcast('ROOM_HEARTBEAT', {
           players: state.players,
           turnIndex: state.currentTurnIndex,
+          sheets: state.characterSheets,
           board: {
             cols: boardEngine.cols,
             rows: boardEngine.rows,
@@ -156,6 +157,7 @@ class NetworkEngine {
           this.broadcast('SYNC_FULL_STATE', {
             players: state.players,
             turnIndex: state.currentTurnIndex,
+            sheets: state.characterSheets,
             board: {
               cols: boardEngine.cols,
               rows: boardEngine.rows,
@@ -184,6 +186,7 @@ class NetworkEngine {
           this.broadcast('SYNC_FULL_STATE', {
             players: updatedPlayers,
             turnIndex: state.currentTurnIndex,
+            sheets: state.characterSheets,
             board: {
               cols: boardEngine.cols,
               rows: boardEngine.rows,
@@ -204,6 +207,9 @@ class NetworkEngine {
           if (typeof message.payload.turnIndex === 'number') {
             state.setTurnIndex(message.payload.turnIndex);
           }
+          if (message.payload.sheets) {
+            state.setCharacterSheets(message.payload.sheets);
+          }
           if (message.payload.board) {
             const b = message.payload.board;
             if (b.cols && b.rows && (b.cols !== boardEngine.cols || b.rows !== boardEngine.rows)) {
@@ -217,6 +223,12 @@ class NetworkEngine {
               boardEngine.render();
             }
           }
+        }
+        break;
+
+      case 'SHEET_UPDATED':
+        if (message.payload && message.sender !== currentUserId) {
+          state.updateCharacterSheet(message.payload.slotId, message.payload);
         }
         break;
 
