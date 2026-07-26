@@ -18,10 +18,8 @@ class UIController {
     this.createToastContainer();
     this.bindEvents();
 
-    // Subscribe to state updates
     state.subscribe((event, data) => this.handleStateChange(event, data));
 
-    // Check saved profile
     const saved = auth.getProfile();
     if (saved) {
       state.setUser(saved);
@@ -171,17 +169,15 @@ class UIController {
       boardEngine.centerView();
     });
 
-    // Map Background Image Upload (Master)
+    // Map Background Image Upload with Automatic Optimization for WebSocket Sync
     document.getElementById('map-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const dataUrl = event.target.result;
-          boardEngine.setBackgroundImage(dataUrl, true);
-          this.showToast('Mapa de fundo carregado!', 'success');
-        };
-        reader.readAsDataURL(file);
+        this.showToast('Processando mapa...', 'info');
+        this.compressMapImage(file, (optimizedDataUrl) => {
+          boardEngine.setBackgroundImage(optimizedDataUrl, true);
+          this.showToast('Mapa enviado para todos os jogadores!', 'success');
+        });
       }
     });
 
@@ -233,13 +229,47 @@ class UIController {
     });
   }
 
+  // Compress map image to max 1000px dimension JPEG (~50KB) so it transmits instantly over WebSockets
+  compressMapImage(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1000;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        callback(compressedDataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   renderFloatingWidgetVisibility() {
     const widget = document.getElementById('floating-players-widget');
     if (widget) {
       if (this.showFloatingPlayers) {
-        widget.classList.remove('hidden');
+        widget.style.display = 'flex';
       } else {
-        widget.classList.add('hidden');
+        widget.style.display = 'none';
       }
     }
   }
@@ -266,6 +296,7 @@ class UIController {
       this.renderPlayers();
       this.renderTurnBanner();
       this.renderRollLog();
+      this.renderFloatingWidgetVisibility();
 
       setTimeout(() => {
         boardEngine.init('tabletop-canvas-container');

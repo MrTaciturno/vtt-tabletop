@@ -144,26 +144,26 @@
           <!-- Canvas Stage Container -->
           <div class="tabletop-canvas-container" id="tabletop-canvas-container">
             <!-- Rendered dynamically by boardEngine -->
+          </div>
 
-            <!-- FLOATING ONLINE PLAYERS WINDOW (Draggable / Closable) -->
-            <div class="floating-players-widget" id="floating-players-widget">
-              <div class="floating-widget-header">
-                <span>👥 Jogadores Online & Turnos</span>
-                <button class="btn-icon" id="close-floating-players" style="padding: 2px 6px; font-size: 0.75rem;">✕</button>
-              </div>
-
-              <div class="player-list" id="vtt-player-list">
-                <!-- Rendered dynamically by JS -->
-              </div>
-
-              <div style="padding: 8px; border-top: 1px solid var(--glass-border);">
-                <button class="btn btn-primary" id="btn-next-turn" style="width: 100%; padding: 4px; font-size: 0.75rem;">
-                  Passar Turno ⏩
-                </button>
-              </div>
+          <!-- FLOATING ONLINE PLAYERS WINDOW (Draggable / Closable) - Placed outside canvas container -->
+          <div class="floating-players-widget" id="floating-players-widget">
+            <div class="floating-widget-header">
+              <span>👥 Jogadores Online & Turnos</span>
+              <button class="btn-icon" id="close-floating-players" style="padding: 2px 6px; font-size: 0.75rem;">✕</button>
             </div>
 
+            <div class="player-list" id="vtt-player-list">
+              <!-- Rendered dynamically by JS -->
+            </div>
+
+            <div style="padding: 8px; border-top: 1px solid var(--glass-border);">
+              <button class="btn btn-primary" id="btn-next-turn" style="width: 100%; padding: 4px; font-size: 0.75rem;">
+                Passar Turno ⏩
+              </button>
+            </div>
           </div>
+
         </section>
 
         <!-- Right Sidebar: Tabbed Control Menu -->
@@ -268,7 +268,7 @@
                 </div>
               </div>
 
-              <!-- Dice Selector Controls (d4, d6, d8, d10, d12, d100 - EXCLUDES d20) -->
+              <!-- Dice Selector Controls -->
               <div class="dice-selector" style="padding: 6px; gap: 6px;">
                 <button class="dice-btn" data-dice="d4" style="width: 36px; height: 36px; font-size: 0.75rem;">d4</button>
                 <button class="dice-btn selected" data-dice="d6" style="width: 36px; height: 36px; font-size: 0.75rem;">d6</button>
