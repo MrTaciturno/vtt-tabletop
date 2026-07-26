@@ -37,8 +37,8 @@ class LobbyManager {
     state.setPlayers([initialPlayer]);
     state.setTurnIndex(0);
 
-    // Initialize network channel for room code
-    network.init(code);
+    // Initialize WebRTC as Host (Master)
+    network.init(code, true);
 
     return lobby;
   }
@@ -66,15 +66,12 @@ class LobbyManager {
       isMaster: Boolean(currentUser.isMaster)
     };
 
-    // Add myself to room
-    const updatedPlayers = [...state.players.filter(p => p.id !== currentUser.id), mePlayer];
+    // Add myself to local player state initially
+    const updatedPlayers = [mePlayer];
     state.setPlayers(updatedPlayers);
 
-    // Initialize network channel
-    network.init(cleanCode);
-
-    // Broadcast join to peers
-    network.broadcast('PLAYER_JOINED', mePlayer);
+    // Initialize WebRTC as Client (Player)
+    network.init(cleanCode, false);
 
     return lobby;
   }
