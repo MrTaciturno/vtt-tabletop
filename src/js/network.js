@@ -15,7 +15,6 @@ class NetworkEngine {
     this.isHost = false;
     this.status = 'DISCONNECTED';
     
-    // List of high-availability public secure WSS WebSocket brokers
     this.brokers = [
       'wss://broker.emqx.io:8084/mqtt',
       'wss://broker.hivemq.com:8884/mqtt'
@@ -28,11 +27,9 @@ class NetworkEngine {
     this.lobbyCode = lobbyCode.toUpperCase();
     this.isHost = isHost;
 
-    // 1. Same-device local tab BroadcastChannel fallback
     this.channel = new BroadcastChannel(`vtt_lobby_${this.lobbyCode}`);
     this.channel.onmessage = (event) => this.handleMessage(event.data);
 
-    // 2. Connect via Secure WebSockets (MQTT Broker)
     this.initMQTT(this.lobbyCode);
   }
 
@@ -47,7 +44,7 @@ class NetworkEngine {
     const clientId = `vtt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const topic = `vtt/rooms/${lobbyCode}`;
 
-    this.updateStatusBadge('🟡 Conectando ao Servidor...', 'badge-player');
+    this.updateStatusBadge('🟡 Conectando...', 'badge-player');
 
     try {
       this.client = mqtt.connect(brokerUrl, {
@@ -58,15 +55,12 @@ class NetworkEngine {
       });
 
       this.client.on('connect', () => {
-        console.log(`[WebSocket] Conectado com sucesso ao broker ${brokerUrl}`);
+        console.log(`[WebSocket] Conectado ao broker ${brokerUrl}`);
         this.status = 'CONNECTED';
-        this.updateStatusBadge('🟢 Sala Conectada (WebSockets)', 'badge-active');
+        this.updateStatusBadge('🟢 Sala Conectada', 'badge-active');
 
-        // Subscribe to the lobby room topic
         this.client.subscribe(topic, { qos: 0 }, (err) => {
           if (!err) {
-            console.log(`[WebSocket] Inscrito no tópico da sala: ${topic}`);
-
             const currentUser = state.currentUser || { id: 'anon_' + Date.now(), username: 'Anon', avatar: '🎲' };
             const playerPayload = {
               id: currentUser.id,
@@ -77,7 +71,6 @@ class NetworkEngine {
 
             this.broadcast('PLAYER_JOINED', playerPayload);
 
-            // If Host, announce room availability
             if (this.isHost) {
               this.broadcast('SYNC_PLAYERS', state.players);
               this.broadcast('BOARD_CONFIG_CHANGED', {
@@ -96,7 +89,7 @@ class NetworkEngine {
           const message = JSON.parse(payload.toString());
           this.handleMessage(message);
         } catch (e) {
-          console.warn('[WebSocket] Received non-JSON message:', e);
+          console.warn('[WebSocket] Non-JSON payload:', e);
         }
       });
 
@@ -118,7 +111,6 @@ class NetworkEngine {
   tryNextBroker(lobbyCode) {
     if (this.brokerIndex < this.brokers.length - 1) {
       this.brokerIndex++;
-      console.log(`[WebSocket] Alternando para broker de backup: ${this.brokers[this.brokerIndex]}`);
       this.closeClient();
       setTimeout(() => this.initMQTT(lobbyCode), 1000);
     } else {
@@ -135,12 +127,10 @@ class NetworkEngine {
       timestamp: Date.now()
     };
 
-    // 1. Broadcast to local tabs
     if (this.channel) {
       this.channel.postMessage(message);
     }
 
-    // 2. Publish to MQTT WebSocket topic
     if (this.client && this.client.connected && this.lobbyCode) {
       const topic = `vtt/rooms/${this.lobbyCode}`;
       this.client.publish(topic, JSON.stringify(message));
@@ -183,6 +173,7 @@ class NetworkEngine {
       }
 
       case 'SYNC_PLAYERS':
+      case 'REORDER_PLAYERS':
         if (Array.isArray(message.payload)) {
           state.setPlayers(message.payload);
         }

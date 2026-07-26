@@ -10,15 +10,16 @@ import { boardEngine } from './board.js';
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize UI & Bindings
   ui.init();
 
-  // Expose global helper actions for dynamic inline HTML buttons
   window.vttApp = {
+    reorderTurn: (fromIndex, direction) => {
+      lobbyManager.movePlayerTurn(fromIndex, direction);
+    },
     toggleMaster: (userId, makeMaster) => {
       try {
         lobbyManager.grantMasterPrivilege(userId, makeMaster);
-        ui.showToast(`Privilégios de Mestre ${makeMaster ? 'concedidos' : 'revogados'}.`, 'gold');
+        ui.showToast(`Privilégios atualizados.`, 'gold');
       } catch (err) {
         ui.showToast(err.message, 'error');
       }
@@ -33,5 +34,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  console.log('⚔️ Virtual Tabletop & Interactive Board Engine Initialized!');
+  console.log('⚔️ Virtual Tabletop Initialized!');
 });

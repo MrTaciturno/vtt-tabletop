@@ -1,15 +1,26 @@
-/* VTT Main Arena Grid Layout */
-.vtt-container {
-  display: grid;
-  grid-template-columns: 280px 1fr 340px;
-  gap: 20px;
-  height: calc(100vh - 110px);
+/* Compact Top Bar & Max-Height Layout */
+.navbar {
+  padding: 6px 16px;
+  min-height: 42px;
 }
 
-@media (max-width: 1200px) {
-  .vtt-container {
-    grid-template-columns: 240px 1fr 300px;
-  }
+.brand-title {
+  font-size: 1.1rem;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 1rem;
+}
+
+/* VTT Container Layout */
+.vtt-container {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 12px;
+  height: calc(100vh - 60px);
+  position: relative;
 }
 
 @media (max-width: 900px) {
@@ -17,48 +28,6 @@
     grid-template-columns: 1fr;
     height: auto;
   }
-}
-
-/* Sidebar Left: Players & Turn Indicator */
-.sidebar-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.player-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  flex: 1;
-  padding-right: 4px;
-}
-
-.player-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  transition: var(--transition);
-}
-
-.player-card.active-turn {
-  background: rgba(139, 92, 246, 0.12);
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.25);
 }
 
 /* Central Tabletop Board Container */
@@ -77,10 +46,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 6px 12px;
   background: rgba(15, 23, 42, 0.9);
   border-bottom: 1px solid var(--glass-border);
   z-index: 10;
+  font-size: 0.8rem;
 }
 
 .tabletop-canvas-container {
@@ -102,12 +72,90 @@
   height: 100%;
 }
 
+/* Floating Online Players Widget */
+.floating-players-widget {
+  position: absolute;
+  top: 48px;
+  left: 12px;
+  width: 260px;
+  max-height: 380px;
+  z-index: 40;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.floating-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--glass-border);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 10px;
+  max-height: 300px;
+}
+
+.player-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  font-size: 0.85rem;
+}
+
+.player-card.active-turn {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
+.turn-reorder-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.turn-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
+  border-radius: 3px;
+  font-size: 0.65rem;
+  padding: 2px 5px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.turn-btn:hover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
 /* Sidebar Right: Tabbed Controls Menu */
 .sidebar-right {
   display: flex;
   flex-direction: column;
   height: 100%;
-  gap: 16px;
+  gap: 12px;
 }
 
 .menu-tabs {
@@ -120,12 +168,12 @@
 
 .menu-tab-btn {
   flex: 1;
-  padding: 8px 4px;
+  padding: 6px 4px;
   border: none;
   background: transparent;
   color: var(--text-muted);
   font-family: var(--font-heading);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -144,66 +192,5 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  gap: 16px;
-}
-
-/* Token Spawner List */
-.token-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.token-card {
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.token-card:hover {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: var(--accent-primary);
-}
-
-/* Preset Maps Grid */
-.preset-maps-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.preset-map-card {
-  height: 70px;
-  border-radius: var(--radius-sm);
-  background-size: cover;
-  background-position: center;
-  border: 2px solid transparent;
-  cursor: pointer;
-  transition: var(--transition);
-  position: relative;
-  overflow: hidden;
-}
-
-.preset-map-card:hover {
-  border-color: var(--accent-primary);
-  transform: scale(1.03);
-}
-
-.preset-map-label {
-  position: absolute;
-  bottom: 0;
-  inset-x: 0;
-  background: rgba(0, 0, 0, 0.75);
-  font-size: 0.75rem;
-  padding: 2px 6px;
-  text-align: center;
-  font-weight: 600;
+  gap: 12px;
 }

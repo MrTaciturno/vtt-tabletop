@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { network } from './network.js';
 
 /**
- * Animated Dice Engine & Web Audio Sound Synthesizer
+ * Animated Dice Engine & Web Audio Sound Synthesizer (d4, d6, d8, d10, d12, d100)
  */
 
 class DiceEngine {
@@ -21,7 +21,6 @@ class DiceEngine {
     return this.audioCtx;
   }
 
-  // Synthesize realistic dice clatter sound using Web Audio API
   playDiceSound() {
     try {
       const ctx = this.getAudioContext();
@@ -50,14 +49,13 @@ class DiceEngine {
     }
   }
 
-  // Synthesize Victory Fanfare for Natural 20
   playFanfareSound() {
     try {
       const ctx = this.getAudioContext();
       if (!ctx) return;
 
       const now = ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -79,13 +77,16 @@ class DiceEngine {
     }
   }
 
-  // Roll specific dice type
-  roll(diceType = 'd20') {
-    const sides = parseInt(diceType.replace('d', ''), 10) || 20;
+  roll(diceType = 'd6') {
+    // Exclude d20 - Supported: d4, d6, d8, d10, d12, d100
+    const allowed = ['d4', 'd6', 'd8', 'd10', 'd12', 'd100'];
+    const validDice = allowed.includes(diceType) ? diceType : 'd6';
+
+    const sides = parseInt(validDice.replace('d', ''), 10) || 6;
     const result = Math.floor(Math.random() * sides) + 1;
 
-    const isNat20 = (diceType === 'd20' && result === 20);
-    const isNat1 = (diceType === 'd20' && result === 1);
+    const isMaxRoll = (result === sides);
+    const isMinRoll = (result === 1);
 
     const currentUser = state.currentUser || { username: 'Jogador', avatar: '🎲' };
 
@@ -93,31 +94,23 @@ class DiceEngine {
       id: 'roll_' + Date.now(),
       player: currentUser.username,
       avatar: currentUser.avatar,
-      diceType,
+      diceType: validDice,
       result,
-      isNat20,
-      isNat1,
+      isMaxRoll,
+      isMinRoll,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };
 
-    // Play sounds & effects
     this.playDiceSound();
 
-    if (isNat20) {
+    if (isMaxRoll) {
       this.playFanfareSound();
       if (window.confetti) {
-        window.confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
+        window.confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
       }
     }
 
-    // Update local state
     state.addDiceRoll(rollData);
-
-    // Broadcast across network
     network.broadcast('DICE_ROLLED', rollData);
 
     return rollData;

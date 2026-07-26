@@ -11,6 +11,7 @@ import { boardEngine } from './board.js';
 class UIController {
   constructor() {
     this.toastContainer = null;
+    this.showFloatingPlayers = true;
   }
 
   init() {
@@ -20,7 +21,12 @@ class UIController {
     // Subscribe to state updates
     state.subscribe((event, data) => this.handleStateChange(event, data));
 
-    // Render initial state
+    // Check saved profile
+    const saved = auth.getProfile();
+    if (saved) {
+      state.setUser(saved);
+    }
+
     this.render();
   }
 
@@ -66,65 +72,38 @@ class UIController {
   }
 
   bindEvents() {
-    // Auth Forms Toggle
-    document.getElementById('tab-login')?.addEventListener('click', () => this.switchAuthTab('login'));
-    document.getElementById('tab-register')?.addEventListener('click', () => this.switchAuthTab('register'));
-
-    // Auth Submission
-    document.getElementById('form-login')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const user = e.target.username.value;
-      const pass = e.target.password.value;
-      try {
-        await auth.login(user, pass);
-        this.showToast('Login efetuado com sucesso!', 'success');
-      } catch (err) {
-        this.showToast(err.message, 'error');
-      }
-    });
-
-    document.getElementById('form-register')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const user = e.target.username.value;
-      const pass = e.target.password.value;
-      const avatar = e.target.avatar?.value || '🎲';
-      const isMaster = e.target.isMaster?.checked;
-      try {
-        await auth.register(user, pass, avatar, isMaster);
-        this.showToast('Conta criada com sucesso!', 'success');
-      } catch (err) {
-        this.showToast(err.message, 'error');
-      }
-    });
-
-    // Navigation & Settings Modal
-    document.getElementById('btn-logout')?.addEventListener('click', () => {
-      auth.logout();
-      this.showToast('Você saiu da sua conta.');
-    });
-
-    document.getElementById('btn-settings')?.addEventListener('click', () => {
-      this.openModal('settings-modal');
-    });
-
-    document.getElementById('close-settings')?.addEventListener('click', () => {
-      this.closeModal('settings-modal');
-    });
-
-    document.getElementById('form-settings')?.addEventListener('submit', (e) => {
+    // Quick Profile Setup Submission
+    document.getElementById('form-quick-profile')?.addEventListener('submit', (e) => {
       e.preventDefault();
       const username = e.target.username.value;
-      const avatar = document.querySelector('.avatar-option.selected')?.dataset.avatar || '🎲';
-      auth.updateProfile({ username, avatar });
-      this.closeModal('settings-modal');
-      this.showToast('Configurações salvas!', 'success');
+      const avatar = document.querySelector('.profile-avatar-option.selected')?.dataset.avatar || '🧙‍♂️';
+      
+      try {
+        auth.saveProfile(username, avatar);
+        this.showToast(`Bem-vindo, ${username}!`, 'success');
+      } catch (err) {
+        this.showToast(err.message, 'error');
+      }
+    });
+
+    // Profile Avatar Selection
+    document.querySelectorAll('.profile-avatar-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        document.querySelectorAll('.profile-avatar-option').forEach(o => o.classList.remove('selected'));
+        e.currentTarget.classList.add('selected');
+      });
+    });
+
+    // Change Profile
+    document.getElementById('btn-change-profile')?.addEventListener('click', () => {
+      auth.logout();
     });
 
     // Lobby Actions
     document.getElementById('btn-create-lobby')?.addEventListener('click', () => {
       try {
         const lobby = lobbyManager.createLobby();
-        this.showToast(`Lobby criado! Código: ${lobby.code}`, 'gold');
+        this.showToast(`Sala criada! Você é o Mestre 👑`, 'gold');
       } catch (err) {
         this.showToast(err.message, 'error');
       }
@@ -134,7 +113,7 @@ class UIController {
       const codeInput = document.getElementById('join-code-input')?.value;
       try {
         lobbyManager.joinLobby(codeInput);
-        this.showToast(`Conectado ao lobby!`, 'success');
+        this.showToast(`Conectado à sala!`, 'success');
       } catch (err) {
         this.showToast(err.message, 'error');
       }
@@ -142,14 +121,25 @@ class UIController {
 
     document.getElementById('btn-leave-lobby')?.addEventListener('click', () => {
       lobbyManager.leaveLobby();
-      this.showToast('Você saiu do lobby.');
+      this.showToast('Você saiu da sala.');
     });
 
     document.getElementById('btn-copy-code')?.addEventListener('click', () => {
       if (state.activeLobby) {
         navigator.clipboard.writeText(state.activeLobby.code);
-        this.showToast('Código do lobby copiado!', 'info');
+        this.showToast('Código da sala copiado!', 'info');
       }
+    });
+
+    // Toggle Floating Players Window
+    document.getElementById('btn-toggle-players-widget')?.addEventListener('click', () => {
+      this.showFloatingPlayers = !this.showFloatingPlayers;
+      this.renderFloatingWidgetVisibility();
+    });
+
+    document.getElementById('close-floating-players')?.addEventListener('click', () => {
+      this.showFloatingPlayers = false;
+      this.renderFloatingWidgetVisibility();
     });
 
     // Turn Controls
@@ -181,7 +171,7 @@ class UIController {
       boardEngine.centerView();
     });
 
-    // Map Background Image Upload
+    // Map Background Image Upload (Master)
     document.getElementById('map-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -200,15 +190,6 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
-    // Preset Maps
-    document.querySelectorAll('.preset-map-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        const mapUrl = e.currentTarget.dataset.mapUrl;
-        boardEngine.setBackgroundImage(mapUrl, true);
-        this.showToast('Mapa selecionado!', 'info');
-      });
-    });
-
     // Token Spawner
     document.getElementById('form-spawn-token')?.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -217,7 +198,7 @@ class UIController {
       const color = e.target.tokenColor.value || '#8b5cf6';
 
       boardEngine.addToken(name, avatar, color, state.currentUser?.id, true);
-      this.showToast(`Token '${name}' adicionado ao tabuleiro!`, 'success');
+      this.showToast(`Token '${name}' adicionado!`, 'success');
       e.target.reset();
     });
 
@@ -232,7 +213,7 @@ class UIController {
       });
     });
 
-    // Dice Roll Controls
+    // Dice Roll Controls (d4, d6, d8, d10, d12, d100)
     document.querySelectorAll('.dice-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const diceType = e.currentTarget.dataset.dice;
@@ -250,67 +231,16 @@ class UIController {
         if (diceCube) diceCube.classList.remove('rolling');
       }, 400);
     });
-
-    // Avatar selection grid in modal
-    document.querySelectorAll('.avatar-option').forEach(opt => {
-      opt.addEventListener('click', (e) => {
-        document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
-        e.currentTarget.classList.add('selected');
-      });
-    });
   }
 
-  switchAuthTab(tab) {
-    const tabLogin = document.getElementById('tab-login');
-    const tabReg = document.getElementById('tab-register');
-    const formLogin = document.getElementById('form-login');
-    const formReg = document.getElementById('form-register');
-
-    if (tab === 'login') {
-      tabLogin?.classList.add('active');
-      tabReg?.classList.remove('active');
-      formLogin?.classList.remove('hidden');
-      formReg?.classList.add('hidden');
-    } else {
-      tabReg?.classList.add('active');
-      tabLogin?.classList.remove('active');
-      formReg?.classList.remove('hidden');
-      formLogin?.classList.add('hidden');
-    }
-  }
-
-  openModal(id) {
-    document.getElementById(id)?.classList.add('active');
-  }
-
-  closeModal(id) {
-    document.getElementById(id)?.classList.remove('active');
-  }
-
-  render() {
-    this.renderNav();
-    this.renderViews();
-  }
-
-  renderNav() {
-    const userNav = document.getElementById('user-nav-content');
-    if (!userNav) return;
-
-    if (state.currentUser) {
-      userNav.innerHTML = `
-        <div class="user-profile-badge" id="btn-settings">
-          <div class="avatar-img">${state.currentUser.avatar}</div>
-          <span style="font-weight: 600;">${state.currentUser.username}</span>
-          ${state.currentUser.isMaster ? '<span class="badge badge-master">👑 Mestre</span>' : '<span class="badge badge-player">Jogador</span>'}
-        </div>
-        <button class="btn btn-secondary btn-icon" id="btn-logout" title="Sair">
-          🚪
-        </button>
-      `;
-      document.getElementById('btn-logout')?.addEventListener('click', () => auth.logout());
-      document.getElementById('btn-settings')?.addEventListener('click', () => this.openModal('settings-modal'));
-    } else {
-      userNav.innerHTML = `<span class="text-muted" style="font-size: 0.85rem;">Faça login para jogar</span>`;
+  renderFloatingWidgetVisibility() {
+    const widget = document.getElementById('floating-players-widget');
+    if (widget) {
+      if (this.showFloatingPlayers) {
+        widget.classList.remove('hidden');
+      } else {
+        widget.classList.add('hidden');
+      }
     }
   }
 
@@ -337,10 +267,27 @@ class UIController {
       this.renderTurnBanner();
       this.renderRollLog();
 
-      // Initialize or resize board engine
       setTimeout(() => {
         boardEngine.init('tabletop-canvas-container');
       }, 50);
+    }
+  }
+
+  renderNav() {
+    const userNav = document.getElementById('user-nav-content');
+    if (!userNav) return;
+
+    if (state.currentUser) {
+      userNav.innerHTML = `
+        <div class="user-profile-badge" id="btn-change-profile" title="Trocar perfil">
+          <div class="avatar-img">${state.currentUser.avatar}</div>
+          <span style="font-weight: 600; font-size: 0.85rem;">${state.currentUser.username}</span>
+          ${state.currentUser.isMaster ? '<span class="badge badge-master">👑 Mestre</span>' : ''}
+        </div>
+      `;
+      document.getElementById('btn-change-profile')?.addEventListener('click', () => auth.logout());
+    } else {
+      userNav.innerHTML = `<span class="text-muted" style="font-size: 0.8rem;">Escolha seu nome para jogar</span>`;
     }
   }
 
@@ -354,7 +301,6 @@ class UIController {
     if (titleEl) titleEl.textContent = lobby.name;
     if (codeEl) codeEl.textContent = lobby.code;
 
-    // Show/Hide Master controls based on role
     const isMaster = state.currentUser?.isMaster || lobby.masterId === state.currentUser?.id;
     const masterControls = document.getElementById('master-board-controls');
     if (masterControls) {
@@ -364,36 +310,33 @@ class UIController {
 
   renderPlayers() {
     const listEl = document.getElementById('vtt-player-list');
+    const countBadge = document.getElementById('online-count-badge');
     if (!listEl) return;
 
-    const activePlayerId = state.players[state.currentTurnIndex]?.id;
+    if (countBadge) countBadge.textContent = `${state.players.length}`;
+
     const isCurrentUserMaster = state.currentUser?.isMaster || state.activeLobby?.masterId === state.currentUser?.id;
 
     listEl.innerHTML = state.players.map((p, index) => {
       const isActiveTurn = index === state.currentTurnIndex;
       return `
         <div class="player-card ${isActiveTurn ? 'active-turn' : ''}">
-          <div class="player-info">
-            <div class="avatar-img">${p.avatar}</div>
+          <div class="player-info" style="gap: 8px;">
+            <div class="avatar-img" style="width: 26px; height: 26px; font-size: 0.75rem;">${p.avatar}</div>
             <div class="player-details">
-              <div class="player-name">
-                ${p.username}
-                ${p.isMaster ? '<span title="Mestre">👑</span>' : ''}
+              <div class="player-name" style="font-size: 0.85rem;">
+                ${p.username} ${p.isMaster ? '👑' : ''}
               </div>
-              <span class="text-muted" style="font-size: 0.75rem;">
-                ${isActiveTurn ? '🟢 Em turno' : 'Aguardando'}
-              </span>
             </div>
           </div>
 
-          <div style="display: flex; gap: 6px; align-items: center;">
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <div class="turn-reorder-btns">
+              <button class="turn-btn" title="Mover para cima" onclick="window.vttApp.reorderTurn(${index}, -1)">▲</button>
+              <button class="turn-btn" title="Mover para baixo" onclick="window.vttApp.reorderTurn(${index}, 1)">▼</button>
+            </div>
             ${isCurrentUserMaster && p.id !== state.currentUser.id ? `
-              <button class="player-role-btn" onclick="window.vttApp.toggleMaster('${p.id}', ${!p.isMaster})">
-                ${p.isMaster ? 'Revogar Mestre' : 'Tornar Mestre'}
-              </button>
-              <button class="btn-icon" style="padding: 2px 6px; font-size: 0.75rem; color: #ef4444;" onclick="window.vttApp.kick('${p.id}')">
-                ❌
-              </button>
+              <button class="btn-icon" style="padding: 2px 4px; font-size: 0.65rem; color: #ef4444;" onclick="window.vttApp.kick('${p.id}')">✕</button>
             ` : ''}
           </div>
         </div>
@@ -404,18 +347,12 @@ class UIController {
   renderTurnBanner() {
     const activePlayer = state.players[state.currentTurnIndex];
     const bannerText = document.getElementById('active-turn-display');
-    const nextBtn = document.getElementById('btn-next-turn');
 
     if (activePlayer && bannerText) {
       const isMyTurn = state.currentUser && state.currentUser.id === activePlayer.id;
       bannerText.innerHTML = isMyTurn ? 
-        `<span style="color: var(--accent-success);">🎯 SEU TURNO!</span> Mova seu token ou role os dados.` :
+        `<span style="color: var(--accent-success);">🎯 SEU TURNO!</span>` :
         `Turno de <strong>${activePlayer.username}</strong> ${activePlayer.avatar}`;
-    }
-
-    const isMasterOrTurn = state.currentUser?.isMaster || state.currentUser?.id === activePlayer?.id;
-    if (nextBtn) {
-      nextBtn.style.display = isMasterOrTurn ? 'inline-flex' : 'none';
     }
   }
 
@@ -441,14 +378,14 @@ class UIController {
     if (!logFeed) return;
 
     logFeed.innerHTML = state.diceHistory.map(roll => `
-      <div class="log-entry ${roll.isNat20 ? 'nat20' : roll.isNat1 ? 'nat1' : ''}">
+      <div class="log-entry ${roll.isMaxRoll ? 'nat20' : roll.isMinRoll ? 'nat1' : ''}">
         <div class="log-meta">
           <span>${roll.avatar} <strong>${roll.player}</strong> (${roll.diceType.toUpperCase()})</span>
           <span>${roll.timestamp}</span>
         </div>
         <div class="log-result">
           Resultado: <strong>${roll.result}</strong>
-          ${roll.isNat20 ? '🔥 ACERTO CRÍTICO! (20)' : roll.isNat1 ? '💀 FALHA CRÍTICA! (1)' : ''}
+          ${roll.isMaxRoll ? '🔥 MÁXIMO!' : roll.isMinRoll ? '💀 MÍNIMO!' : ''}
         </div>
       </div>
     `).join('');

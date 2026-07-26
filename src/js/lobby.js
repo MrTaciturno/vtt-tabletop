@@ -8,13 +8,12 @@ import { auth } from './auth.js';
 
 class LobbyManager {
   createLobby(roomName = 'Mesa Principal') {
-    const currentUser = state.currentUser;
-    if (!currentUser) throw new Error('Você precisa estar logado.');
+    let currentUser = state.currentUser;
+    if (!currentUser) throw new Error('Escolha seu nome e avatar primeiro.');
 
-    // Force user to be Master when creating a lobby if they aren't already
-    if (!currentUser.isMaster) {
-      auth.toggleMasterPrivilege(currentUser.id, true);
-    }
+    // Creator automatically becomes Master
+    auth.toggleMasterPrivilege(currentUser.id, true);
+    currentUser = state.currentUser;
 
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const lobby = {
@@ -37,7 +36,7 @@ class LobbyManager {
     state.setPlayers([initialPlayer]);
     state.setTurnIndex(0);
 
-    // Initialize WebRTC as Host (Master)
+    // Initialize WebSockets as Host (Master)
     network.init(code, true);
 
     return lobby;
@@ -45,14 +44,14 @@ class LobbyManager {
 
   joinLobby(code) {
     const currentUser = state.currentUser;
-    if (!currentUser) throw new Error('Você precisa estar logado.');
+    if (!currentUser) throw new Error('Escolha seu nome e avatar primeiro.');
 
     const cleanCode = code.trim().toUpperCase();
-    if (!cleanCode) throw new Error('Código do lobby inválido.');
+    if (!cleanCode) throw new Error('Código da sala inválido.');
 
     const lobby = {
       code: cleanCode,
-      name: `Lobby ${cleanCode}`,
+      name: `Sala ${cleanCode}`,
       masterId: null,
       turnIndex: 0
     };
@@ -66,11 +65,9 @@ class LobbyManager {
       isMaster: Boolean(currentUser.isMaster)
     };
 
-    // Add myself to local player state initially
-    const updatedPlayers = [mePlayer];
-    state.setPlayers(updatedPlayers);
+    state.setPlayers([mePlayer]);
 
-    // Initialize WebRTC as Client (Player)
+    // Initialize WebSockets as Client (Player)
     network.init(cleanCode, false);
 
     return lobby;
@@ -87,18 +84,29 @@ class LobbyManager {
     const nextIndex = (state.currentTurnIndex + 1) % state.players.length;
     state.setTurnIndex(nextIndex);
 
-    // Broadcast turn advance across network
     network.broadcast('ADVANCE_TURN', { turnIndex: nextIndex });
+  }
+
+  movePlayerTurn(fromIndex, direction) {
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= state.players.length) return;
+
+    const updated = [...state.players];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+
+    state.setPlayers(updated);
+
+    // Broadcast reordered turn positions to all clients
+    network.broadcast('REORDER_PLAYERS', updated);
   }
 
   grantMasterPrivilege(targetUserId, makeMaster = true) {
     if (!state.currentUser || (!state.currentUser.isMaster && state.activeLobby?.masterId !== state.currentUser.id)) {
-      throw new Error('Apenas o Mestre pode conceder ou revogar privilégios.');
+      throw new Error('Apenas o Mestre pode conceder privilégios.');
     }
 
     auth.toggleMasterPrivilege(targetUserId, makeMaster);
-
-    // Broadcast change
     network.broadcast('MASTER_PRIVILEGE_CHANGED', { targetUserId, isMaster: makeMaster });
   }
 
