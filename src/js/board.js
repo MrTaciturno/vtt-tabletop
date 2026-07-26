@@ -80,17 +80,15 @@ class BoardEngine {
   // Defined 17x22 Character Sheet Slots around the Central Map
   getSlots() {
     const mapX = this.mapOriginX;
-    const mapY = this.mapOriginY;
     const mapCols = this.mapCols;
-    const mapRows = this.mapRows;
+    const centeredSlot5X = mapX + Math.floor((mapCols - 17) / 2);
 
     return [
       { id: 0, label: 'Planilha 1 (Esq. Sup)', x: 0, y: 0, cols: 17, rows: 22 },
       { id: 1, label: 'Planilha 2 (Esq. Inf)', x: 0, y: 22, cols: 17, rows: 22 },
       { id: 2, label: 'Planilha 3 (Dir. Sup)', x: mapX + mapCols, y: 0, cols: 17, rows: 22 },
       { id: 3, label: 'Planilha 4 (Dir. Inf)', x: mapX + mapCols, y: 22, cols: 17, rows: 22 },
-      { id: 4, label: 'Planilha 5 (Topo)', x: mapX, y: 0, cols: 17, rows: 22 },
-      { id: 5, label: 'Planilha 6 (Base)', x: mapX, y: mapY + mapRows, cols: 17, rows: 22 }
+      { id: 4, label: 'Planilha 5 (Topo Central)', x: centeredSlot5X, y: 0, cols: 17, rows: 22 }
     ];
   }
 
@@ -387,12 +385,22 @@ class BoardEngine {
     ctx.fillRect(0, 0, totalW, totalH);
 
     // 1. Draw Central Map Background Area
+    ctx.fillStyle = '#151d2a';
+    ctx.fillRect(mapX, mapY, mapW, mapH);
+
     if (this.bgImage) {
-      // Anchored at top-left corner of the central map grid
-      ctx.drawImage(this.bgImage, mapX, mapY, mapW, mapH);
-    } else {
-      ctx.fillStyle = '#151d2a';
-      ctx.fillRect(mapX, mapY, mapW, mapH);
+      // Anchored at top-left corner of central map grid with exact cell dimensions configured by master (no stretch)
+      const drawImgCols = Math.min(this.mapCols, Math.max(1, this.cols || 17));
+      const drawImgRows = Math.min(this.mapRows, Math.max(1, this.rows || 22));
+      const imgW = drawImgCols * this.cellSize;
+      const imgH = drawImgRows * this.cellSize;
+
+      ctx.drawImage(this.bgImage, mapX, mapY, imgW, imgH);
+
+      // Boundary outline for configured map size
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(mapX, mapY, imgW, imgH);
     }
 
     // 2. Draw Character Sheet Slot Rectangles (17x22 each)
@@ -409,8 +417,27 @@ class BoardEngine {
       const cachedImg = this.sheetImageCache[slot.id];
 
       if (cachedImg) {
-        // Draw uploaded sheet image inside 17x22 rectangle
-        ctx.drawImage(cachedImg, slotPixelX, slotPixelY, slotPixelW, slotPixelH);
+        // Background for slot
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.fillRect(slotPixelX, slotPixelY, slotPixelW, slotPixelH);
+
+        // Aspect-ratio contain fit inside 17x22 rectangle to prevent sheet stretch
+        const imgRatio = cachedImg.width / cachedImg.height;
+        const slotRatio = slotPixelW / slotPixelH;
+        let drawW = slotPixelW;
+        let drawH = slotPixelH;
+        let drawX = slotPixelX;
+        let drawY = slotPixelY;
+
+        if (imgRatio > slotRatio) {
+          drawH = slotPixelW / imgRatio;
+          drawY = slotPixelY + (slotPixelH - drawH) / 2;
+        } else {
+          drawW = slotPixelH * imgRatio;
+          drawX = slotPixelX + (slotPixelW - drawW) / 2;
+        }
+
+        ctx.drawImage(cachedImg, drawX, drawY, drawW, drawH);
       } else {
         // Draw empty slot background placeholder
         ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
