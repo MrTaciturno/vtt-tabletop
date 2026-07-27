@@ -300,21 +300,30 @@ class BoardEngine {
     const container = this.container;
     if (!container) return;
 
-    // Zoom on Mouse Wheel
+    // Zoom on Mouse Wheel (Mathematically exact zoom centered on mouse cursor)
     container.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * zoomFactor));
-      
+
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      this.panX = mouseX - (mouseX - this.panX) * (newScale / this.scale);
-      this.panY = mouseY - (mouseY - this.panY) * (newScale / this.scale);
-      this.scale = newScale;
+      const delta = -Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 100);
+      const zoomFactor = Math.pow(1.0015, delta * 30);
+      
+      const targetScale = this.scale * zoomFactor;
+      const newScale = Math.max(this.minScale, Math.min(this.maxScale, targetScale));
 
-      this.render();
+      if (newScale !== this.scale) {
+        const worldMouseX = (mouseX - this.panX) / this.scale;
+        const worldMouseY = (mouseY - this.panY) / this.scale;
+
+        this.scale = newScale;
+        this.panX = mouseX - worldMouseX * newScale;
+        this.panY = mouseY - worldMouseY * newScale;
+
+        this.render();
+      }
     }, { passive: false });
 
     // Mouse Panning & Dragging Position Tracker
@@ -326,7 +335,7 @@ class BoardEngine {
       if (!this.draggedToken) {
         this.isPanning = true;
         this.startPanX = e.clientX - this.panX;
-        this.startPanY = e.clientY - this.startPanY;
+        this.startPanY = e.clientY - this.panY; // Fixed typo (was this.startPanY)
 
         // Deselect token if clicking empty board background
         const gridPos = this.screenToGrid(mouseX, mouseY);
