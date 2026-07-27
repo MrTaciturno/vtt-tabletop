@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "postinstall": "vite build",
     "start": "node server.js"
   },
   "engines": {
