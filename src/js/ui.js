@@ -71,6 +71,7 @@ class UIController {
     } else if (event === 'DICE_ROLLED') {
       this.renderRollLog();
       this.animateDiceDisplay(data);
+      this.showGlobalDiceAnnouncement(data);
     } else if (event === 'DICE_SELECTED') {
       this.updateDiceSelectionUI(data);
     }
@@ -310,23 +311,22 @@ class UIController {
       }
     });
 
-    // Dice Roll Controls (d4, d6, d8, d10, d12, d100)
+    // Instant Dice Roll Controls (d4, d6, d8, d10, d12, d20, d100)
     document.querySelectorAll('.dice-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const diceType = e.currentTarget.dataset.dice;
-        state.setSelectedDice(diceType);
-      });
-    });
+        this.updateDiceSelectionUI(diceType);
 
-    document.getElementById('btn-roll-dice')?.addEventListener('click', () => {
-      const diceCube = document.getElementById('dice-cube');
-      if (diceCube) {
-        diceCube.classList.add('rolling');
-      }
-      setTimeout(() => {
-        diceEngine.roll(state.selectedDice);
-        if (diceCube) diceCube.classList.remove('rolling');
-      }, 400);
+        const modVal = parseInt(document.getElementById('dice-modifier-input')?.value, 10) || 0;
+
+        const diceCube = document.getElementById('dice-cube');
+        if (diceCube) {
+          diceCube.classList.add('rolling');
+          setTimeout(() => diceCube.classList.remove('rolling'), 400);
+        }
+
+        diceEngine.roll(diceType, modVal);
+      });
     });
   }
 
@@ -556,9 +556,38 @@ class UIController {
 
   animateDiceDisplay(rollData) {
     const diceCube = document.getElementById('dice-cube');
-    if (diceCube) {
-      diceCube.textContent = rollData.result;
+    if (diceCube && rollData) {
+      const val = rollData.totalResult !== undefined ? rollData.totalResult : rollData.result;
+      diceCube.textContent = val;
     }
+  }
+
+  showGlobalDiceAnnouncement(data) {
+    const banner = document.getElementById('global-dice-announcement');
+    const playerEl = document.getElementById('announcement-player');
+    const resultEl = document.getElementById('announcement-result');
+    const detailsEl = document.getElementById('announcement-details');
+
+    if (!banner || !playerEl || !resultEl || !detailsEl || !data) return;
+
+    const username = data.player?.username || data.player || 'Jogador';
+    const avatar = data.player?.avatar || data.avatar || '🎲';
+
+    playerEl.innerHTML = `${avatar} <strong>${username}</strong> rolou:`;
+    
+    const mod = Number(data.modifier) || 0;
+    const modStr = mod > 0 ? ` + ${mod}` : (mod < 0 ? ` - ${Math.abs(mod)}` : '');
+    const raw = data.rawResult !== undefined ? data.rawResult : data.result;
+    const total = data.totalResult !== undefined ? data.totalResult : data.result;
+
+    resultEl.textContent = `${total}`;
+    detailsEl.textContent = `Dado: ${data.diceType ? data.diceType.toUpperCase() : 'D20'}${modStr} (Resultado bruto: ${raw})`;
+
+    banner.classList.remove('hidden');
+    if (this.announcementTimeout) clearTimeout(this.announcementTimeout);
+    this.announcementTimeout = setTimeout(() => {
+      banner.classList.add('hidden');
+    }, 4000);
   }
 
   updateDiceSelectionUI(diceType) {
@@ -575,18 +604,27 @@ class UIController {
     const logFeed = document.getElementById('vtt-roll-log');
     if (!logFeed) return;
 
-    logFeed.innerHTML = state.diceHistory.map(roll => `
-      <div class="log-entry ${roll.isMaxRoll ? 'nat20' : roll.isMinRoll ? 'nat1' : ''}">
-        <div class="log-meta">
-          <span>${roll.avatar} <strong>${roll.player}</strong> (${roll.diceType.toUpperCase()})</span>
-          <span>${roll.timestamp}</span>
+    logFeed.innerHTML = state.diceHistory.slice().reverse().map(roll => {
+      const username = roll.player?.username || roll.player || 'Jogador';
+      const avatar = roll.player?.avatar || roll.avatar || '🎲';
+      const mod = Number(roll.modifier) || 0;
+      const modStr = mod > 0 ? `+${mod}` : (mod < 0 ? `${mod}` : '');
+      const raw = roll.rawResult !== undefined ? roll.rawResult : roll.result;
+      const total = roll.totalResult !== undefined ? roll.totalResult : roll.result;
+
+      return `
+        <div class="log-entry ${roll.isMaxRoll ? 'nat20' : roll.isMinRoll ? 'nat1' : ''}">
+          <div class="log-meta">
+            <span>${avatar} <strong>${username}</strong> (${roll.diceType ? roll.diceType.toUpperCase() : 'D20'}${modStr ? ' ' + modStr : ''})</span>
+            <span>${roll.timestamp}</span>
+          </div>
+          <div class="log-result">
+            Resultado: <strong>${total}</strong> ${modStr ? `<small style="font-weight:normal; opacity:0.8;">(${raw} ${modStr})</small>` : ''}
+            ${roll.isMaxRoll ? '🔥 MÁXIMO!' : roll.isMinRoll ? '💀 MÍNIMO!' : ''}
+          </div>
         </div>
-        <div class="log-result">
-          Resultado: <strong>${roll.result}</strong>
-          ${roll.isMaxRoll ? '🔥 MÁXIMO!' : roll.isMinRoll ? '💀 MÍNIMO!' : ''}
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 }
 

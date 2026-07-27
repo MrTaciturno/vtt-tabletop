@@ -2,7 +2,8 @@ import { state } from './state.js';
 import { network } from './network.js';
 
 /**
- * Animated Dice Engine & Web Audio Sound Synthesizer (d4, d6, d8, d10, d12, d100)
+ * Animated Dice Engine & Web Audio Sound Synthesizer (d4, d6, d8, d10, d12, d20, d100)
+ * Calculates raw roll + modifier = total result and plays audio SFX.
  */
 
 class DiceEngine {
@@ -77,25 +78,32 @@ class DiceEngine {
     }
   }
 
-  roll(diceType = 'd6') {
-    // Exclude d20 - Supported: d4, d6, d8, d10, d12, d100
-    const allowed = ['d4', 'd6', 'd8', 'd10', 'd12', 'd100'];
-    const validDice = allowed.includes(diceType) ? diceType : 'd6';
+  roll(diceType = 'd20', modifier = 0) {
+    const allowed = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
+    const validDice = allowed.includes(diceType) ? diceType : 'd20';
 
-    const sides = parseInt(validDice.replace('d', ''), 10) || 6;
-    const result = Math.floor(Math.random() * sides) + 1;
+    const sides = parseInt(validDice.replace('d', ''), 10) || 20;
+    const rawResult = Math.floor(Math.random() * sides) + 1;
+    const modNum = parseInt(modifier, 10) || 0;
+    const totalResult = rawResult + modNum;
 
-    const isMaxRoll = (result === sides);
-    const isMinRoll = (result === 1);
+    const isMaxRoll = (rawResult === sides);
+    const isMinRoll = (rawResult === 1);
 
-    const currentUser = state.currentUser || { username: 'Jogador', avatar: '🎲' };
+    const currentUser = state.currentUser || { id: 'anon_' + Date.now(), username: 'Jogador', avatar: '🎲' };
 
     const rollData = {
-      id: 'roll_' + Date.now(),
-      player: currentUser.username,
-      avatar: currentUser.avatar,
+      id: 'roll_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      player: {
+        id: currentUser.id,
+        username: currentUser.username,
+        avatar: currentUser.avatar
+      },
       diceType: validDice,
-      result,
+      rawResult,
+      modifier: modNum,
+      totalResult,
+      result: totalResult, // Fallback property
       isMaxRoll,
       isMinRoll,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })

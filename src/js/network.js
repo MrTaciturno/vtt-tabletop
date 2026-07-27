@@ -152,7 +152,9 @@ class NetworkEngine {
       });
 
       this.socket.on('DICE_ROLLED', (rollData) => {
-        if (rollData) state.addDiceRoll(rollData);
+        if (rollData && rollData.player?.id !== state.currentUser?.id) {
+          state.addDiceRoll(rollData);
+        }
       });
 
       this.socket.on('disconnect', () => {

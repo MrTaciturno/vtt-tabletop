@@ -164,7 +164,7 @@ io.on('connection', (socket) => {
   socket.on('DICE_ROLLED', (rollData) => {
     const code = socket.roomCode;
     if (code) {
-      io.to(code).emit('DICE_ROLLED', rollData);
+      socket.to(code).emit('DICE_ROLLED', rollData);
     }
   });
 

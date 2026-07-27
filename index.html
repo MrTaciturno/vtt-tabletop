@@ -19,6 +19,15 @@
 </head>
 <body>
 
+  <!-- Temporary Global Room Dice Announcement Overlay (Shows for 4s for all players) -->
+  <div id="global-dice-announcement" class="hidden" style="position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 99999; pointer-events: none;">
+    <div style="padding: 12px 28px; border: 2px solid var(--accent-gold); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center; background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(8px);">
+      <div id="announcement-player" style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 2px;"></div>
+      <div id="announcement-result" style="font-size: 2.2rem; font-weight: bold; color: var(--accent-gold); line-height: 1.1;"></div>
+      <div id="announcement-details" style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;"></div>
+    </div>
+  </div>
+
   <!-- Ultra-Compact Navigation Bar -->
   <nav class="navbar" style="padding: 4px 16px; min-height: 38px;">
     <div class="nav-brand">
@@ -405,26 +414,31 @@
 
           <!-- TAB 3: Dice Roller & Roll Log -->
           <div class="tab-pane hidden" id="tab-pane-dice">
-            <div class="dice-stage" style="min-height: 160px;">
+            <div class="dice-stage" style="min-height: 170px; padding: 12px 8px;">
               <div class="dice-display-3d" style="width: 70px; height: 70px; margin-bottom: 8px;">
                 <div class="dice-cube" id="dice-cube" style="width: 60px; height: 60px; font-size: 1.8rem;">
-                  6
+                  20
                 </div>
               </div>
 
-              <!-- Dice Selector Controls -->
-              <div class="dice-selector" style="padding: 6px; gap: 6px;">
-                <button class="dice-btn" data-dice="d4" style="width: 36px; height: 36px; font-size: 0.75rem;">d4</button>
-                <button class="dice-btn selected" data-dice="d6" style="width: 36px; height: 36px; font-size: 0.75rem;">d6</button>
-                <button class="dice-btn" data-dice="d8" style="width: 36px; height: 36px; font-size: 0.75rem;">d8</button>
-                <button class="dice-btn" data-dice="d10" style="width: 36px; height: 36px; font-size: 0.75rem;">d10</button>
-                <button class="dice-btn" data-dice="d12" style="width: 36px; height: 36px; font-size: 0.75rem;">d12</button>
-                <button class="dice-btn" data-dice="d100" style="width: 36px; height: 36px; font-size: 0.75rem;">d100</button>
+              <!-- Modifier Input Field -->
+              <div class="form-group" style="margin-bottom: 8px; width: 100%;">
+                <label for="dice-modifier-input" style="font-size: 0.75rem; text-align: center; display: block; color: var(--accent-gold);">Modificador (Bônus / Penalidade)</label>
+                <input type="number" id="dice-modifier-input" class="form-control" value="0" placeholder="Ex: 2 ou -1" style="font-size: 0.9rem; padding: 6px; text-align: center; font-weight: bold;" />
               </div>
 
-              <button class="btn btn-gold" id="btn-roll-dice" style="margin-top: 8px; font-size: 0.85rem; width: 100%; padding: 8px;">
-                🎲 Rolar Dado
-              </button>
+              <p style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; text-align: center;">Clique em um dado para rolar instantaneamente:</p>
+
+              <!-- Instant Dice Buttons Grid (d4, d6, d8, d10, d12, d20, d100) -->
+              <div class="dice-selector" style="padding: 4px; gap: 4px; display: grid; grid-template-columns: repeat(4, 1fr);">
+                <button class="dice-btn" data-dice="d4" style="padding: 6px 0; font-size: 0.8rem; height: auto; min-width: auto;">d4</button>
+                <button class="dice-btn" data-dice="d6" style="padding: 6px 0; font-size: 0.8rem; height: auto; min-width: auto;">d6</button>
+                <button class="dice-btn" data-dice="d8" style="padding: 6px 0; font-size: 0.8rem; height: auto; min-width: auto;">d8</button>
+                <button class="dice-btn" data-dice="d10" style="padding: 6px 0; font-size: 0.8rem; height: auto; min-width: auto;">d10</button>
+                <button class="dice-btn" data-dice="d12" style="padding: 6px 0; font-size: 0.8rem; height: auto; min-width: auto;">d12</button>
+                <button class="dice-btn selected" data-dice="d20" style="padding: 6px 0; font-size: 0.8rem; font-weight: bold; border-color: var(--accent-gold); height: auto; min-width: auto;">d20</button>
+                <button class="dice-btn" data-dice="d100" style="padding: 6px 0; font-size: 0.8rem; grid-column: span 2; height: auto; min-width: auto;">d100</button>
+              </div>
             </div>
 
             <!-- Roll Feed -->
