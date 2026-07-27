@@ -128,6 +128,10 @@ class NetworkEngine {
         if (id) boardEngine.moveToken(id, x, y, false);
       });
 
+      this.socket.on('TOKEN_UPDATED', (tokenData) => {
+        if (tokenData && tokenData.id) boardEngine.updateToken(tokenData.id, tokenData, false);
+      });
+
       this.socket.on('TOKEN_DELETED', ({ id }) => {
         if (id) boardEngine.deleteToken(id, false);
       });

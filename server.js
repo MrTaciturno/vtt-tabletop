@@ -117,6 +117,17 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('TOKEN_UPDATED', (tokenData) => {
+    const code = socket.roomCode;
+    if (code && rooms[code] && tokenData) {
+      const tok = rooms[code].board.tokens.find(t => t.id === tokenData.id);
+      if (tok) {
+        Object.assign(tok, tokenData);
+      }
+      io.to(code).emit('TOKEN_UPDATED', tokenData);
+    }
+  });
+
   socket.on('TOKEN_DELETED', ({ id }) => {
     const code = socket.roomCode;
     if (code && rooms[code]) {

@@ -3,6 +3,7 @@ import { network } from './network.js';
 
 /**
  * High-Performance WebGL 2D Tabletop Engine powered by PixiJS
+ * Features 1-cell separation lane, token vector movement arrows, and token selection.
  */
 
 class BoardEngine {
@@ -14,11 +15,14 @@ class BoardEngine {
     this.MIN_MAP_COLS = 17;
     this.MIN_MAP_ROWS = 22;
 
-    // Surrounding Outer Grid Margins
+    // Surrounding Outer Grid Margins (Character Sheet Area)
     this.outerLeft = 17;
     this.outerRight = 17;
     this.outerTop = 22;
     this.outerBottom = 22;
+
+    // 1-Cell Separation Lane Ring around Central Map
+    this.gapSize = 1;
 
     // Central Map Configured Dimensions
     this.cols = 20;
@@ -26,7 +30,6 @@ class BoardEngine {
 
     this.cellSize = 50; // Base cell size in pixels
     this.bgImageUrl = null;
-    this.mapSprite = null;
 
     // Cache of loaded PixiJS sheet textures { [slotId]: PIXI.Texture }
     this.sheetTextures = {};
@@ -41,9 +44,14 @@ class BoardEngine {
     this.startPanX = 0;
     this.startPanY = 0;
 
-    // Token Management
+    // Token Management & Dragging
     this.tokens = [];
     this.draggedToken = null;
+    this.selectedTokenId = null;
+    this.dragStartGridX = 0;
+    this.dragStartGridY = 0;
+    this.dragTargetGridX = 0;
+    this.dragTargetGridY = 0;
 
     // Bindings
     this.onResize = this.resize.bind(this);
@@ -58,31 +66,32 @@ class BoardEngine {
   }
 
   get mapOriginX() {
-    return this.outerLeft;
+    return this.outerLeft + this.gapSize;
   }
 
   get mapOriginY() {
-    return this.outerTop;
+    return this.outerTop + this.gapSize;
   }
 
   get totalCols() {
-    return this.outerLeft + this.mapCols + this.outerRight;
+    return this.outerLeft + this.gapSize + this.mapCols + this.gapSize + this.outerRight;
   }
 
   get totalRows() {
-    return this.outerTop + this.mapRows + this.outerBottom;
+    return this.outerTop + this.gapSize + this.mapRows + this.gapSize + this.outerBottom;
   }
 
   getSlots() {
     const mapX = this.mapOriginX;
     const mapCols = this.mapCols;
     const centeredSlot5X = mapX + Math.floor((mapCols - 17) / 2);
+    const rightSlotX = mapX + mapCols + this.gapSize;
 
     return [
       { id: 0, label: 'Planilha 1 (Esq. Sup)', x: 0, y: 0, cols: 17, rows: 22 },
       { id: 1, label: 'Planilha 2 (Esq. Inf)', x: 0, y: 22, cols: 17, rows: 22 },
-      { id: 2, label: 'Planilha 3 (Dir. Sup)', x: mapX + mapCols, y: 0, cols: 17, rows: 22 },
-      { id: 3, label: 'Planilha 4 (Dir. Inf)', x: mapX + mapCols, y: 22, cols: 17, rows: 22 },
+      { id: 2, label: 'Planilha 3 (Dir. Sup)', x: rightSlotX, y: 0, cols: 17, rows: 22 },
+      { id: 3, label: 'Planilha 4 (Dir. Inf)', x: rightSlotX, y: 22, cols: 17, rows: 22 },
       { id: 4, label: 'Planilha 5 (Topo Central)', x: centeredSlot5X, y: 0, cols: 17, rows: 22 }
     ];
   }
@@ -91,12 +100,11 @@ class BoardEngine {
     this.container = document.getElementById(containerId);
     if (!this.container) return;
 
-    this.container.innerHTML = ''; // Clear container
+    this.container.innerHTML = '';
 
     const width = this.container.clientWidth || 800;
     const height = this.container.clientHeight || 600;
 
-    // Initialize PixiJS Application
     const PixiApp = window.PIXI ? PIXI.Application : null;
 
     if (PixiApp) {
@@ -110,7 +118,7 @@ class BoardEngine {
       });
       this.container.appendChild(this.app.view);
     } else {
-      console.warn('[BoardEngine] PixiJS not loaded via CDN. Falling back to native canvas.');
+      console.warn('[BoardEngine] PixiJS not loaded via CDN.');
     }
 
     this.centerView();
@@ -216,6 +224,13 @@ class BoardEngine {
     }
   }
 
+  selectToken(tokenId) {
+    this.selectedTokenId = tokenId;
+    const token = this.tokens.find(t => t.id === tokenId);
+    state.notify('TOKEN_SELECTED', token);
+    this.render();
+  }
+
   addToken(name, avatar, color = '#8b5cf6', ownerId = null, broadcast = true) {
     const tokenId = 'tok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     
@@ -233,7 +248,7 @@ class BoardEngine {
     };
 
     this.tokens.push(token);
-    this.render();
+    this.selectToken(tokenId);
 
     if (broadcast) {
       network.broadcast('TOKEN_SPAWNED', token);
@@ -254,7 +269,23 @@ class BoardEngine {
     }
   }
 
+  updateToken(tokenId, updates, broadcast = true) {
+    const token = this.tokens.find(t => t.id === tokenId);
+    if (token) {
+      Object.assign(token, updates);
+      this.render();
+
+      if (broadcast) {
+        network.broadcast('TOKEN_UPDATED', token);
+      }
+    }
+  }
+
   deleteToken(tokenId, broadcast = true) {
+    if (this.selectedTokenId === tokenId) {
+      this.selectedTokenId = null;
+      state.notify('TOKEN_SELECTED', null);
+    }
     this.tokens = this.tokens.filter(t => t.id !== tokenId);
     this.render();
 
@@ -286,18 +317,39 @@ class BoardEngine {
       this.render();
     }, { passive: false });
 
-    // Mouse Panning
+    // Mouse Panning & Dragging Position Tracker
     container.addEventListener('mousedown', (e) => {
-      // Check if clicking inside stage background (not token)
-      if (e.target === this.app?.view || e.target === container || e.target.tagName === 'CANVAS') {
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      if (!this.draggedToken) {
         this.isPanning = true;
         this.startPanX = e.clientX - this.panX;
-        this.startPanY = e.clientY - this.panY;
+        this.startPanY = e.clientY - this.startPanY;
+
+        // Deselect token if clicking empty board background
+        const gridPos = this.screenToGrid(mouseX, mouseY);
+        const clickedToken = this.tokens.slice().reverse().find(t => t.x === gridPos.x && t.y === gridPos.y);
+        if (!clickedToken) {
+          this.selectToken(null);
+        }
       }
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (this.isPanning) {
+      if (this.draggedToken && container) {
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const gridPos = this.screenToGrid(mouseX, mouseY);
+
+        if (gridPos.x !== this.dragTargetGridX || gridPos.y !== this.dragTargetGridY) {
+          this.dragTargetGridX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
+          this.dragTargetGridY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
+          this.moveToken(this.draggedToken.id, this.dragTargetGridX, this.dragTargetGridY, true);
+        }
+      } else if (this.isPanning) {
         this.panX = e.clientX - this.startPanX;
         this.panY = e.clientY - this.startPanY;
         this.render();
@@ -306,6 +358,8 @@ class BoardEngine {
 
     window.addEventListener('mouseup', () => {
       this.isPanning = false;
+      this.draggedToken = null;
+      this.render();
     });
   }
 
@@ -323,9 +377,8 @@ class BoardEngine {
     if (!this.app || !window.PIXI) return;
 
     const stage = this.app.stage;
-    stage.removeChildren(); // Refresh stage
+    stage.removeChildren();
 
-    // Apply transform (Pan & Zoom)
     stage.position.set(this.panX, this.panY);
     stage.scale.set(this.scale, this.scale);
 
@@ -343,13 +396,23 @@ class BoardEngine {
     bgGfx.drawRect(0, 0, totalW, totalH);
     bgGfx.endFill();
 
+    // 1-Cell Separation Lane Ring (Faixa de Separação de Grid com Tom Cyan Translúcido)
+    const gapX = (this.mapOriginX - this.gapSize) * this.cellSize;
+    const gapY = (this.mapOriginY - this.gapSize) * this.cellSize;
+    const gapW = (this.mapCols + this.gapSize * 2) * this.cellSize;
+    const gapH = (this.mapRows + this.gapSize * 2) * this.cellSize;
+
+    bgGfx.beginFill(0x06b6d4, 0.22);
+    bgGfx.drawRect(gapX, gapY, gapW, gapH);
+    bgGfx.endFill();
+
     // Central Map Background Area
     bgGfx.beginFill(0x151d2a);
     bgGfx.drawRect(mapX, mapY, mapW, mapH);
     bgGfx.endFill();
     stage.addChild(bgGfx);
 
-    // Layer 1: Map Background Sprite (Anchored top-left, exact cell dimension, no stretch)
+    // Layer 1: Map Background Sprite (Anchored top-left, exact cell dimensions)
     if (this.bgImageUrl) {
       const texture = PIXI.Texture.from(this.bgImageUrl);
       const sprite = new PIXI.Sprite(texture);
@@ -386,13 +449,11 @@ class BoardEngine {
       const slotGfx = new PIXI.Graphics();
 
       if (sheet && sheet.imageUrl) {
-        // Dark background for slot
         slotGfx.beginFill(0x0f172a, 0.95);
         slotGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         slotGfx.endFill();
         slotContainer.addChild(slotGfx);
 
-        // Render sheet sprite with aspect-ratio contain
         const sheetTexture = PIXI.Texture.from(sheet.imageUrl);
         const sheetSprite = new PIXI.Sprite(sheetTexture);
 
@@ -414,12 +475,10 @@ class BoardEngine {
         sheetSprite.height = slotPixelH;
         slotContainer.addChild(sheetSprite);
 
-        // Green Border
         const borderGfx = new PIXI.Graphics();
         borderGfx.lineStyle(3, 0x22c55e, 0.8);
         borderGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         
-        // Header Tag
         borderGfx.beginFill(0x22c55e, 0.9);
         borderGfx.drawRect(0, 0, slotPixelW, 26);
         borderGfx.endFill();
@@ -436,7 +495,6 @@ class BoardEngine {
         slotContainer.addChild(labelText);
 
       } else {
-        // Empty Slot
         slotGfx.beginFill(0x0f172a, 0.75);
         slotGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         slotGfx.endFill();
@@ -475,7 +533,7 @@ class BoardEngine {
       stage.addChild(slotContainer);
     });
 
-    // Layer 3: Complete Square Grid Lines Overlay
+    // Layer 3: Square Grid Overlay & 1-Cell Separation Lane Border
     const gridGfx = new PIXI.Graphics();
     gridGfx.lineStyle(1, 0xffffff, 0.12);
 
@@ -487,6 +545,10 @@ class BoardEngine {
       gridGfx.moveTo(0, r * this.cellSize);
       gridGfx.lineTo(this.totalCols * this.cellSize, r * this.cellSize);
     }
+
+    // 1-Cell Separation Ring Outline
+    gridGfx.lineStyle(2.5, 0x06b6d4, 0.9);
+    gridGfx.drawRect(gapX, gapY, gapW, gapH);
 
     // Central Map Border Glow
     gridGfx.lineStyle(4, 0x8b5cf6, 0.8);
@@ -509,7 +571,7 @@ class BoardEngine {
     mapTitle.y = (mapY - 26 < 0 ? mapY : mapY - 26) + 6;
     stage.addChild(mapTitle);
 
-    // Layer 4: Interactive Tokens Layer (PixiJS DisplayObjects & Dragging)
+    // Layer 4: Interactive Tokens Layer
     const tokensContainer = new PIXI.Container();
 
     this.tokens.forEach(t => {
@@ -523,7 +585,7 @@ class BoardEngine {
       tokGroup.eventMode = 'static';
       tokGroup.cursor = 'pointer';
 
-      // Token Base Circle Graphic
+      // Circle Base Graphic
       const circleGfx = new PIXI.Graphics();
       const hexColor = parseInt((t.color || '#8b5cf6').replace('#', '0x'), 16);
       circleGfx.beginFill(hexColor);
@@ -534,6 +596,14 @@ class BoardEngine {
       circleGfx.drawCircle(0, 0, radius);
       tokGroup.addChild(circleGfx);
 
+      // Selected Highlight Ring
+      if (this.selectedTokenId === t.id) {
+        const selGfx = new PIXI.Graphics();
+        selGfx.lineStyle(3, 0xf59e0b, 1);
+        selGfx.drawCircle(0, 0, radius + 5);
+        tokGroup.addChild(selGfx);
+      }
+
       // Avatar Emoji Text
       const avatarText = new PIXI.Text(t.avatar || '🎲', {
         fontSize: radius * 1.1
@@ -542,7 +612,7 @@ class BoardEngine {
       avatarText.y = 1;
       tokGroup.addChild(avatarText);
 
-      // Name Label Text
+      // Name Label Tag
       const nameText = new PIXI.Text(t.name, {
         fontFamily: 'sans-serif',
         fontSize: 10,
@@ -555,12 +625,18 @@ class BoardEngine {
       nameText.y = radius + 4;
       tokGroup.addChild(nameText);
 
-      // Interactive Drag Handlers
+      // Interactive Pointer Events
       tokGroup.on('pointerdown', (e) => {
+        this.selectToken(t.id);
+
         const isMaster = state.currentUser?.isMaster || state.activeLobby?.masterId === state.currentUser?.id;
         const canDrag = isMaster || t.ownerId === state.currentUser?.id;
         if (canDrag) {
           this.draggedToken = t;
+          this.dragStartGridX = t.x;
+          this.dragStartGridY = t.y;
+          this.dragTargetGridX = t.x;
+          this.dragTargetGridY = t.y;
           e.stopPropagation();
         }
       });
@@ -569,6 +645,65 @@ class BoardEngine {
     });
 
     stage.addChild(tokensContainer);
+
+    // Layer 5: Vector Arrow & Distance Indicator During Dragging
+    if (this.draggedToken && (this.dragTargetGridX !== this.dragStartGridX || this.dragTargetGridY !== this.dragStartGridY)) {
+      const vectorGfx = new PIXI.Graphics();
+      const startPxX = (this.dragStartGridX + 0.5) * this.cellSize;
+      const startPxY = (this.dragStartGridY + 0.5) * this.cellSize;
+      const endPxX = (this.dragTargetGridX + 0.5) * this.cellSize;
+      const endPxY = (this.dragTargetGridY + 0.5) * this.cellSize;
+
+      // Glow Vector Line
+      vectorGfx.lineStyle(4, 0x38bdf8, 0.9);
+      vectorGfx.moveTo(startPxX, startPxY);
+      vectorGfx.lineTo(endPxX, endPxY);
+
+      // Vector Arrowhead
+      const angle = Math.atan2(endPxY - startPxY, endPxX - startPxX);
+      const arrowSize = 14;
+      vectorGfx.beginFill(0x38bdf8, 1);
+      vectorGfx.drawPolygon([
+        endPxX, endPxY,
+        endPxX - arrowSize * Math.cos(angle - Math.PI / 6), endPxY - arrowSize * Math.sin(angle - Math.PI / 6),
+        endPxX - arrowSize * Math.cos(angle + Math.PI / 6), endPxY - arrowSize * Math.sin(angle + Math.PI / 6)
+      ]);
+      vectorGfx.endFill();
+
+      // Start Position Marker Circle
+      vectorGfx.lineStyle(2, 0x38bdf8, 0.8);
+      vectorGfx.beginFill(0x0f172a, 0.7);
+      vectorGfx.drawCircle(startPxX, startPxY, 8);
+      vectorGfx.endFill();
+
+      stage.addChild(vectorGfx);
+
+      // Distance Badge Calculation (Chebyshev grid cells distance)
+      const dx = Math.abs(this.dragTargetGridX - this.dragStartGridX);
+      const dy = Math.abs(this.dragTargetGridY - this.dragStartGridY);
+      const distCells = Math.max(dx, dy);
+
+      const midPxX = (startPxX + endPxX) / 2;
+      const midPxY = (startPxY + endPxY) / 2;
+
+      const badgeGfx = new PIXI.Graphics();
+      badgeGfx.beginFill(0x0369a1, 0.95);
+      badgeGfx.lineStyle(1.5, 0x38bdf8, 1);
+      badgeGfx.drawRoundedRect(midPxX - 34, midPxY - 14, 68, 28, 6);
+      badgeGfx.endFill();
+      stage.addChild(badgeGfx);
+
+      const distText = new PIXI.Text(`${distCells} quad.`, {
+        fontFamily: 'sans-serif',
+        fontSize: 11,
+        fontWeight: 'bold',
+        fill: 0xffffff
+      });
+      distText.anchor.set(0.5);
+      distText.x = midPxX;
+      distText.y = midPxY;
+      stage.addChild(distText);
+    }
   }
 }
 

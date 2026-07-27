@@ -280,7 +280,7 @@
             </form>
 
             <h4 style="margin-bottom: 6px; font-size: 0.8rem; color: var(--text-muted);">Tokens Rápidos</h4>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
               <button class="btn btn-secondary quick-token-btn" data-name="Mago" data-avatar="🧙‍♂️" data-color="#8b5cf6" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 🧙‍♂️ Mago Aliado
               </button>
@@ -290,6 +290,50 @@
               <button class="btn btn-secondary quick-token-btn" data-name="Goblin" data-avatar="👺" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 👺 Goblin Inimigo
               </button>
+            </div>
+
+            <!-- Token Edit Section (Shows when token is selected) -->
+            <div id="token-edit-panel" class="hidden" style="padding: 10px; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--accent-primary); border-radius: var(--radius-sm); margin-top: 10px;">
+              <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">✏️ Editar Token Selecionado</h4>
+              
+              <form id="form-edit-token">
+                <div class="form-group" style="margin-bottom: 6px;">
+                  <label for="edit-token-name" style="font-size: 0.75rem;">Nome</label>
+                  <input type="text" id="edit-token-name" class="form-control" style="font-size: 0.8rem; padding: 6px;" required />
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem;">Ícone</label>
+                    <select id="edit-token-avatar" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                      <option value="⚔️">⚔️ Guerreiro</option>
+                      <option value="🧙‍♂️">🧙‍♂️ Mago</option>
+                      <option value="🧝‍♀️">🧝‍♀️ Elfa</option>
+                      <option value="🛡️">🛡️ Paladino</option>
+                      <option value="🏹">🏹 Arqueiro</option>
+                      <option value="🐉">🐉 Dragão</option>
+                      <option value="👹">👹 Ogro</option>
+                      <option value="👺">👺 Goblin</option>
+                      <option value="🧟">🧟 Zumbi</option>
+                      <option value="🐺">🐺 Lobo</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem;">Cor do Anel</label>
+                    <input type="color" id="edit-token-color" class="form-control" style="height: 32px; padding: 2px;" />
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 4px;">
+                  <button type="submit" class="btn btn-primary" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                    💾 Salvar
+                  </button>
+                  <button type="button" id="btn-delete-token" class="btn btn-danger" style="font-size: 0.75rem; padding: 6px;">
+                    🗑️ Excluir
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
 

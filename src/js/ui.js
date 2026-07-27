@@ -66,6 +66,8 @@ class UIController {
       this.updateSheetSelectOptions();
     } else if (event === 'SHEETS_CHANGED') {
       this.updateSheetSelectOptions();
+    } else if (event === 'TOKEN_SELECTED') {
+      this.updateTokenEditUI(data);
     } else if (event === 'DICE_ROLLED') {
       this.renderRollLog();
       this.animateDiceDisplay(data);
@@ -241,6 +243,28 @@ class UIController {
       });
     });
 
+    // Form Edit Selected Token
+    document.getElementById('form-edit-token')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const tokenId = boardEngine.selectedTokenId;
+      if (!tokenId) return;
+
+      const name = document.getElementById('edit-token-name')?.value;
+      const avatar = document.getElementById('edit-token-avatar')?.value;
+      const color = document.getElementById('edit-token-color')?.value;
+
+      boardEngine.updateToken(tokenId, { name, avatar, color }, true);
+      this.showToast(`Token '${name}' atualizado!`, 'success');
+    });
+
+    document.getElementById('btn-delete-token')?.addEventListener('click', () => {
+      const tokenId = boardEngine.selectedTokenId;
+      if (!tokenId) return;
+
+      boardEngine.deleteToken(tokenId, true);
+      this.showToast(`Token removido.`, 'info');
+    });
+
     // Dice Roll Controls (d4, d6, d8, d10, d12, d100)
     document.querySelectorAll('.dice-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -339,6 +363,26 @@ class UIController {
     } else {
       selectEl.value = mySlotId;
     }
+  }
+
+  updateTokenEditUI(token) {
+    const editPanel = document.getElementById('token-edit-panel');
+    if (!editPanel) return;
+
+    if (!token) {
+      editPanel.classList.add('hidden');
+      return;
+    }
+
+    editPanel.classList.remove('hidden');
+
+    const nameInput = document.getElementById('edit-token-name');
+    const avatarSelect = document.getElementById('edit-token-avatar');
+    const colorInput = document.getElementById('edit-token-color');
+
+    if (nameInput) nameInput.value = token.name || '';
+    if (avatarSelect) avatarSelect.value = token.avatar || '⚔️';
+    if (colorInput) colorInput.value = token.color || '#8b5cf6';
   }
 
   renderFloatingWidgetVisibility() {
