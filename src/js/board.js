@@ -70,6 +70,11 @@ class BoardEngine {
     this.lastMouseX = 0;
     this.lastMouseY = 0;
 
+    // Network Throttling & Lerp Animation State
+    this.lastDragEmitTime = 0;
+    this.DRAG_EMIT_INTERVAL = 33; // 30Hz network limit (33ms)
+    this.animatingSmoothTokens = false;
+
     // Bindings
     this.onResize = this.resize.bind(this);
   }
@@ -351,14 +356,62 @@ class BoardEngine {
   moveToken(tokenId, x, y, broadcast = true) {
     const token = this.tokens.find(t => t.id === tokenId);
     if (token) {
-      token.x = Math.max(0, Math.min(this.totalCols - 1, x));
-      token.y = Math.max(0, Math.min(this.totalRows - 1, y));
-      this.render();
+      const newX = Math.max(0, Math.min(this.totalCols - 1, x));
+      const newY = Math.max(0, Math.min(this.totalRows - 1, y));
 
-      if (broadcast) {
+      if (!broadcast) {
+        // Received from remote peer: smoothly interpolate position
+        token.targetX = newX;
+        token.targetY = newY;
+        this.startSmoothTokenAnimation();
+      } else {
+        // Local movement: snap immediately
+        token.x = newX;
+        token.y = newY;
+        delete token.targetX;
+        delete token.targetY;
+        this.render();
+
         network.broadcast('TOKEN_MOVED', { id: tokenId, x: token.x, y: token.y });
       }
     }
+  }
+
+  startSmoothTokenAnimation() {
+    if (this.animatingSmoothTokens) return;
+    this.animatingSmoothTokens = true;
+
+    const animateStep = () => {
+      let stillAnimating = false;
+
+      this.tokens.forEach(t => {
+        if (t.targetX !== undefined && t.targetY !== undefined) {
+          const dx = t.targetX - t.x;
+          const dy = t.targetY - t.y;
+
+          if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+            t.x += dx * 0.35;
+            t.y += dy * 0.35;
+            stillAnimating = true;
+          } else {
+            t.x = t.targetX;
+            t.y = t.targetY;
+            delete t.targetX;
+            delete t.targetY;
+          }
+        }
+      });
+
+      this.render();
+
+      if (stillAnimating) {
+        requestAnimationFrame(animateStep);
+      } else {
+        this.animatingSmoothTokens = false;
+      }
+    };
+
+    requestAnimationFrame(animateStep);
   }
 
   updateToken(tokenId, updates, broadcast = true) {
@@ -493,6 +546,20 @@ class BoardEngine {
       } else if (this.draggedToken && container) {
         this.dragCurrentPixelX = worldPos.x;
         this.dragCurrentPixelY = worldPos.y;
+
+        const now = Date.now();
+        if (now - this.lastDragEmitTime >= this.DRAG_EMIT_INTERVAL) {
+          this.lastDragEmitTime = now;
+          const currentGridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
+          const currentGridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
+
+          if (this.draggedToken.x !== currentGridX || this.draggedToken.y !== currentGridY) {
+            this.draggedToken.x = currentGridX;
+            this.draggedToken.y = currentGridY;
+            network.broadcast('TOKEN_MOVED', { id: this.draggedToken.id, x: currentGridX, y: currentGridY });
+          }
+        }
+
         this.render();
 
       } else if (this.isPanning) {
