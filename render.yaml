@@ -1,0 +1,18 @@
+services:
+  # Opção 1: Render Static Site (Recomendado)
+  - type: web
+    name: vtt-tabletop-static
+    env: static
+    buildCommand: npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # Opção 2: Render Web Service (Node.js)
+  - type: web
+    name: vtt-tabletop-service
+    env: node
+    buildCommand: npm run build
+    startCommand: npm start

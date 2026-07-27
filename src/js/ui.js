@@ -55,12 +55,17 @@ class UIController {
     if (event === 'USER_CHANGED') {
       this.renderNav();
       this.renderViews();
+      this.updateSheetSelectOptions();
     } else if (event === 'LOBBY_CHANGED') {
       this.renderViews();
       this.renderLobbyHeader();
+      this.updateSheetSelectOptions();
     } else if (event === 'PLAYERS_CHANGED' || event === 'TURN_CHANGED') {
       this.renderPlayers();
       this.renderTurnBanner();
+      this.updateSheetSelectOptions();
+    } else if (event === 'SHEETS_CHANGED') {
+      this.updateSheetSelectOptions();
     } else if (event === 'DICE_ROLLED') {
       this.renderRollLog();
       this.animateDiceDisplay(data);
@@ -189,12 +194,17 @@ class UIController {
     // Character Sheet Controls
     document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
-      if (file) {
+      const slotId = document.getElementById('sheet-slot-select')?.value;
+      if (file && slotId !== undefined) {
         this.showToast('Processando imagem da planilha...', 'info');
         this.compressMapImage(file, (optimizedDataUrl) => {
-          boardEngine.setSheetImage(slotId, optimizedDataUrl, true);
-          this.showToast('Planilha atualizada e exibida na mesa!', 'success');
+          try {
+            boardEngine.setSheetImage(slotId, optimizedDataUrl, true);
+            this.showToast('Planilha atualizada e exibida na mesa!', 'success');
+            this.updateSheetSelectOptions();
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
         });
       }
     });
@@ -283,6 +293,52 @@ class UIController {
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  }
+
+  updateSheetSelectOptions() {
+    const selectEl = document.getElementById('sheet-slot-select');
+    if (!selectEl) return;
+
+    const currentUserId = state.currentUser?.id;
+    const sheets = state.characterSheets || {};
+    const slots = boardEngine.getSlots();
+
+    // Determine current user's default assigned slot
+    let mySlotId = Object.keys(sheets).find(sId => sheets[sId]?.ownerId === currentUserId);
+
+    if (mySlotId === undefined) {
+      // Find slot corresponding to player index or first empty slot
+      const userIndex = state.players.findIndex(p => p.id === currentUserId);
+      if (userIndex >= 0 && userIndex < slots.length && !sheets[userIndex]) {
+        mySlotId = userIndex;
+      } else {
+        const emptySlot = slots.find(s => !sheets[s.id]);
+        mySlotId = emptySlot ? emptySlot.id : 0;
+      }
+    } else {
+      mySlotId = Number(mySlotId);
+    }
+
+    const previousVal = selectEl.value;
+
+    selectEl.innerHTML = slots.map(s => {
+      const sheet = sheets[s.id];
+      let statusTag = ' (Vaga Livre)';
+      if (sheet) {
+        if (sheet.ownerId === currentUserId) {
+          statusTag = ` — 🌟 Sua Planilha (${sheet.ownerName})`;
+        } else {
+          statusTag = ` — 👤 ${sheet.ownerName}`;
+        }
+      }
+      return `<option value="${s.id}">${s.label}${statusTag}</option>`;
+    }).join('');
+
+    if (previousVal !== '' && slots.some(s => s.id === Number(previousVal))) {
+      selectEl.value = previousVal;
+    } else {
+      selectEl.value = mySlotId;
+    }
   }
 
   renderFloatingWidgetVisibility() {

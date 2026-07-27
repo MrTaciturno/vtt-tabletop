@@ -217,15 +217,23 @@ class BoardEngine {
 
   setSheetImage(slotId, imageUrl, broadcast = true) {
     const currentUser = state.currentUser || { id: 'anon', username: 'Jogador' };
+    const isMaster = currentUser.isMaster || state.activeLobby?.masterId === currentUser.id;
+    const sId = Number(slotId);
+
+    const existing = state.characterSheets[sId];
+    if (existing && existing.ownerId && existing.ownerId !== currentUser.id && !isMaster) {
+      throw new Error(`Esta vaga de planilha já pertence a ${existing.ownerName}. Escolha outra vaga no menu!`);
+    }
+
     const sheetData = {
-      slotId: Number(slotId),
+      slotId: sId,
       ownerId: currentUser.id,
       ownerName: currentUser.username,
       imageUrl,
       updatedAt: Date.now()
     };
 
-    state.updateCharacterSheet(slotId, sheetData);
+    state.updateCharacterSheet(sId, sheetData);
 
     if (broadcast) {
       network.broadcast('SHEET_UPDATED', sheetData);
