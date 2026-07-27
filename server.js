@@ -148,8 +148,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// SPA Fallback
-app.get('*', (req, res) => {
+// SPA Fallback Catch-All Middleware
+app.use((req, res) => {
   const distIndex = path.join(DIST_DIR, 'index.html');
   if (fs.existsSync(distIndex)) {
     res.sendFile(distIndex);
