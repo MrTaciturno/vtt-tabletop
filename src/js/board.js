@@ -52,6 +52,10 @@ class BoardEngine {
     this.dragStartGridY = 0;
     this.dragCurrentPixelX = 0;
     this.dragCurrentPixelY = 0;
+    this.dragMouseOffsetX = 0;
+    this.dragMouseOffsetY = 0;
+    this.dragTopLeftPixelX = 0;
+    this.dragTopLeftPixelY = 0;
     this.dragWaypoints = []; // Array of grid waypoint objects [{ x, y }]
 
     // Master Drawing Tools State
@@ -547,11 +551,16 @@ class BoardEngine {
         this.dragCurrentPixelX = worldPos.x;
         this.dragCurrentPixelY = worldPos.y;
 
+        this.dragTopLeftPixelX = worldPos.x - this.dragMouseOffsetX;
+        this.dragTopLeftPixelY = worldPos.y - this.dragMouseOffsetY;
+
+        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+
         const now = Date.now();
         if (now - this.lastDragEmitTime >= this.DRAG_EMIT_INTERVAL) {
           this.lastDragEmitTime = now;
-          const currentGridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
-          const currentGridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
+          const currentGridX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
+          const currentGridY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
 
           if (this.draggedToken.x !== currentGridX || this.draggedToken.y !== currentGridY) {
             this.draggedToken.x = currentGridX;
@@ -623,8 +632,9 @@ class BoardEngine {
       }
 
       if (this.draggedToken) {
-        const gridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
-        const gridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
+        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+        const gridX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
+        const gridY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
 
         this.moveToken(this.draggedToken.id, gridX, gridY, true);
         this.draggedToken = null;
@@ -640,9 +650,9 @@ class BoardEngine {
       if ((e.code === 'Space' || e.key === ' ') && this.draggedToken) {
         e.preventDefault();
 
-        const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
-        const targetX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
-        const targetY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
+        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+        const targetX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
+        const targetY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
 
         const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
         if (!lastWp || lastWp.x !== targetX || lastWp.y !== targetY) {
@@ -1008,6 +1018,17 @@ class BoardEngine {
           this.lastMouseY = (origEvent.clientY || 0) - rect.top;
 
           const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+
+          // Top-left cell center of the token:
+          const topLeftCenterX = (t.x + 0.5) * this.cellSize;
+          const topLeftCenterY = (t.y + 0.5) * this.cellSize;
+
+          // Mouse offset relative to the TOP-LEFT cell center:
+          this.dragMouseOffsetX = worldPos.x - topLeftCenterX;
+          this.dragMouseOffsetY = worldPos.y - topLeftCenterY;
+
+          this.dragTopLeftPixelX = topLeftCenterX;
+          this.dragTopLeftPixelY = topLeftCenterY;
           this.dragCurrentPixelX = worldPos.x;
           this.dragCurrentPixelY = worldPos.y;
 
@@ -1044,12 +1065,12 @@ class BoardEngine {
         accumulatedDist += Math.hypot(wp2.x - wp1.x, wp2.y - wp1.y);
       }
 
-      // 2. Draw current active segment from last waypoint to current free cursor position
+      // 2. Draw current active segment from last waypoint to current top-left cell center
       const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
       const lastPxX = (lastWp.x + 0.5) * this.cellSize;
       const lastPxY = (lastWp.y + 0.5) * this.cellSize;
-      const currPxX = this.dragCurrentPixelX;
-      const currPxY = this.dragCurrentPixelY;
+      const currPxX = this.dragTopLeftPixelX;
+      const currPxY = this.dragTopLeftPixelY;
 
       vectorGfx.moveTo(lastPxX, lastPxY);
       vectorGfx.lineTo(currPxX, currPxY);
