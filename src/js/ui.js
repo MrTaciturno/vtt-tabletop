@@ -12,6 +12,7 @@ class UIController {
   constructor() {
     this.toastContainer = null;
     this.showFloatingPlayers = true;
+    this.tokenNameCounters = {};
   }
 
   init() {
@@ -224,23 +225,32 @@ class UIController {
     // Token Spawner
     document.getElementById('form-spawn-token')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      const name = e.target.tokenName.value || 'Token';
-      const avatar = e.target.tokenAvatar.value || '🛡️';
-      const color = e.target.tokenColor.value || '#8b5cf6';
+      const rawName = e.target.tokenName?.value;
+      const imageUrl = e.target.tokenImg?.value || null;
+      const avatar = e.target.tokenAvatar?.value || '🛡️';
+      const color = e.target.tokenColor?.value || '#8b5cf6';
+      const size = Number(e.target.tokenSize?.value) || 1;
 
-      boardEngine.addToken(name, avatar, color, state.currentUser?.id, true);
-      this.showToast(`Token '${name}' adicionado!`, 'success');
+      const finalName = this.getAutoTokenName(rawName, imageUrl, avatar);
+
+      boardEngine.addToken(finalName, avatar, color, state.currentUser?.id, size, imageUrl, true);
+      this.showToast(`Token '${finalName}' (${size}x${size}) adicionado!`, 'success');
       e.target.reset();
     });
 
     // Quick Spawn Presets
     document.querySelectorAll('.quick-token-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const name = e.currentTarget.dataset.name;
-        const avatar = e.currentTarget.dataset.avatar;
-        const color = e.currentTarget.dataset.color;
-        boardEngine.addToken(name, avatar, color, state.currentUser?.id, true);
-        this.showToast(`Token '${name}' adicionado!`, 'success');
+        const rawName = e.currentTarget.dataset.name;
+        const avatar = e.currentTarget.dataset.avatar || '🎲';
+        const color = e.currentTarget.dataset.color || '#8b5cf6';
+        const imageUrl = e.currentTarget.dataset.img || null;
+        const size = Number(e.currentTarget.dataset.size) || 1;
+
+        const finalName = this.getAutoTokenName(rawName, imageUrl, avatar);
+
+        boardEngine.addToken(finalName, avatar, color, state.currentUser?.id, size, imageUrl, true);
+        this.showToast(`Token '${finalName}' (${size}x${size}) adicionado!`, 'success');
       });
     });
 
@@ -253,9 +263,10 @@ class UIController {
       const name = document.getElementById('edit-token-name')?.value;
       const avatar = document.getElementById('edit-token-avatar')?.value;
       const color = document.getElementById('edit-token-color')?.value;
+      const size = Number(document.getElementById('edit-token-size')?.value) || 1;
 
-      boardEngine.updateToken(tokenId, { name, avatar, color }, true);
-      this.showToast(`Token '${name}' atualizado!`, 'success');
+      boardEngine.updateToken(tokenId, { name, avatar, color, size }, true);
+      this.showToast(`Token '${name}' (${size}x${size}) atualizado!`, 'success');
     });
 
     document.getElementById('btn-delete-token')?.addEventListener('click', () => {
@@ -410,6 +421,25 @@ class UIController {
     }
   }
 
+  getAutoTokenName(inputName, imageUrl, avatar) {
+    if (inputName && inputName.trim()) {
+      return inputName.trim();
+    }
+
+    let baseName = 'Token';
+    if (imageUrl) {
+      const filename = imageUrl.split('/').pop();
+      baseName = filename.replace(/\.[^/.]+$/, "");
+    } else if (avatar) {
+      baseName = avatar;
+    }
+
+    if (!this.tokenNameCounters) this.tokenNameCounters = {};
+    this.tokenNameCounters[baseName] = (this.tokenNameCounters[baseName] || 0) + 1;
+
+    return `${baseName}-${this.tokenNameCounters[baseName]}`;
+  }
+
   updateTokenEditUI(token) {
     const editPanel = document.getElementById('token-edit-panel');
     if (!editPanel) return;
@@ -424,10 +454,12 @@ class UIController {
     const nameInput = document.getElementById('edit-token-name');
     const avatarSelect = document.getElementById('edit-token-avatar');
     const colorInput = document.getElementById('edit-token-color');
+    const sizeSelect = document.getElementById('edit-token-size');
 
     if (nameInput) nameInput.value = token.name || '';
     if (avatarSelect) avatarSelect.value = token.avatar || '⚔️';
     if (colorInput) colorInput.value = token.color || '#8b5cf6';
+    if (sizeSelect) sizeSelect.value = token.size || 1;
   }
 
   renderFloatingWidgetVisibility() {

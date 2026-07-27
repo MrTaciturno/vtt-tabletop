@@ -321,7 +321,7 @@ class BoardEngine {
     this.render();
   }
 
-  addToken(name, avatar, color = '#8b5cf6', ownerId = null, broadcast = true) {
+  addToken(name, avatar, color = '#8b5cf6', ownerId = null, size = 1, imageUrl = null, broadcast = true) {
     const tokenId = 'tok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     
     const x = this.mapOriginX + Math.floor(this.mapCols / 2);
@@ -332,6 +332,8 @@ class BoardEngine {
       name,
       avatar,
       color,
+      size: Math.max(1, Math.min(4, Number(size) || 1)),
+      imageUrl: imageUrl || null,
       ownerId: ownerId || state.currentUser?.id,
       x,
       y
@@ -847,48 +849,71 @@ class BoardEngine {
 
     this.tokens.forEach(t => {
       const tokGroup = new PIXI.Container();
+      const tSize = Math.max(1, Math.min(4, Number(t.size) || 1));
       
       const isBeingDragged = this.draggedToken && this.draggedToken.id === t.id;
-      const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + 0.5) * this.cellSize;
-      const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + 0.5) * this.cellSize;
-      const radius = (this.cellSize / 2) * 0.8;
+      const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + tSize / 2) * this.cellSize;
+      const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + tSize / 2) * this.cellSize;
+      const radius = ((tSize * this.cellSize) / 2) * 0.88;
 
       tokGroup.x = centerX;
       tokGroup.y = centerY;
       tokGroup.eventMode = 'static';
       tokGroup.cursor = 'pointer';
 
-      // Circle Base Graphic
-      const circleGfx = new PIXI.Graphics();
       const hexColor = parseInt((t.color || '#8b5cf6').replace('#', '0x'), 16);
-      circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
-      circleGfx.drawCircle(0, 0, radius);
-      circleGfx.endFill();
 
-      circleGfx.lineStyle(2.5, 0xffffff, 1);
-      circleGfx.drawCircle(0, 0, radius);
-      tokGroup.addChild(circleGfx);
+      if (t.imageUrl) {
+        // Image Token Sprite
+        const tex = PIXI.Texture.from(t.imageUrl);
+        const sprite = new PIXI.Sprite(tex);
+        sprite.anchor.set(0.5);
+        sprite.width = radius * 1.8;
+        sprite.height = radius * 1.8;
+
+        // Circular Background & Border for Image Token
+        const circleGfx = new PIXI.Graphics();
+        circleGfx.beginFill(0x0f172a, isBeingDragged ? 0.85 : 1.0);
+        circleGfx.drawCircle(0, 0, radius);
+        circleGfx.endFill();
+
+        circleGfx.lineStyle(3, hexColor, 1);
+        circleGfx.drawCircle(0, 0, radius);
+        tokGroup.addChild(circleGfx);
+        tokGroup.addChild(sprite);
+
+      } else {
+        // Emoji Token Base Graphic
+        const circleGfx = new PIXI.Graphics();
+        circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
+        circleGfx.drawCircle(0, 0, radius);
+        circleGfx.endFill();
+
+        circleGfx.lineStyle(2.5, 0xffffff, 1);
+        circleGfx.drawCircle(0, 0, radius);
+        tokGroup.addChild(circleGfx);
+
+        // Avatar Emoji Text
+        const avatarText = new PIXI.Text(t.avatar || '🎲', {
+          fontSize: radius * 1.0
+        });
+        avatarText.anchor.set(0.5);
+        avatarText.y = 1;
+        tokGroup.addChild(avatarText);
+      }
 
       // Selected Highlight Ring
       if (this.selectedTokenId === t.id) {
         const selGfx = new PIXI.Graphics();
-        selGfx.lineStyle(3, 0xf59e0b, 1);
+        selGfx.lineStyle(3.5, 0xf59e0b, 1);
         selGfx.drawCircle(0, 0, radius + 5);
         tokGroup.addChild(selGfx);
       }
 
-      // Avatar Emoji Text
-      const avatarText = new PIXI.Text(t.avatar || '🎲', {
-        fontSize: radius * 1.1
-      });
-      avatarText.anchor.set(0.5);
-      avatarText.y = 1;
-      tokGroup.addChild(avatarText);
-
       // Name Label Tag
       const nameText = new PIXI.Text(t.name, {
         fontFamily: 'sans-serif',
-        fontSize: 10,
+        fontSize: Math.max(10, 9 + tSize),
         fontWeight: 'bold',
         fill: 0xffffff,
         stroke: 0x000000,

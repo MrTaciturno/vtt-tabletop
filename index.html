@@ -251,19 +251,56 @@
             </div>
           </div>
 
-          <!-- TAB 2: Tokens Spawner -->
+          <!-- TAB 2: Tokens Spawner & Library -->
           <div class="tab-pane hidden" id="tab-pane-tokens">
-            <h4 style="margin-bottom: 6px; font-size: 0.85rem;">⚡ Inserir Novo Token</h4>
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">⚡ Inserir Novo Token</h4>
             
             <form id="form-spawn-token">
               <div class="form-group" style="margin-bottom: 6px;">
-                <label for="token-name-input" style="font-size: 0.75rem;">Nome da Criatura / Jogador</label>
-                <input type="text" id="token-name-input" name="tokenName" class="form-control" placeholder="Ex: Guerreiro" required style="font-size: 0.8rem; padding: 6px;" />
+                <label for="token-name-input" style="font-size: 0.75rem;">Nome (Opcional - Gerado como Nome-1 se em branco)</label>
+                <input type="text" id="token-name-input" name="tokenName" class="form-control" placeholder="Ex: Guerreiro (ou deixe em branco)" style="font-size: 0.8rem; padding: 6px;" />
               </div>
 
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+              <!-- Local Image Library Selection -->
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label for="token-img-select" style="font-size: 0.75rem;">Imagem da Pasta src/img/</label>
+                <select id="token-img-select" name="tokenImg" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                  <option value="">-- Usar Emoji / Ícone Abaixo --</option>
+                  <option value="./src/img/DemonBabau.png">😈 DemonBabau.png</option>
+                  <option value="./src/img/Ghoul.png">🧟 Ghoul.png</option>
+                  <option value="./src/img/Goblin.png">👺 Goblin.png</option>
+                  <option value="./src/img/HobGoblin.png">👹 HobGoblin.png</option>
+                  <option value="./src/img/IC1x1.png">📏 IC1x1.png</option>
+                  <option value="./src/img/IC1x2.png">📏 IC1x2.png</option>
+                  <option value="./src/img/IC1x3.png">📏 IC1x3.png</option>
+                  <option value="./src/img/IC1x4.png">📏 IC1x4.png</option>
+                  <option value="./src/img/IC2x1.png">📏 IC2x1.png</option>
+                  <option value="./src/img/IC2x2.png">📏 IC2x2.png</option>
+                  <option value="./src/img/IC2x3.png">📏 IC2x3.png</option>
+                  <option value="./src/img/IC2x4.png">📏 IC2x4.png</option>
+                  <option value="./src/img/IC3x1.png">📏 IC3x1.png</option>
+                  <option value="./src/img/IC3x2.png">📏 IC3x2.png</option>
+                  <option value="./src/img/IC3x3.png">📏 IC3x3.png</option>
+                  <option value="./src/img/IC3x4.png">📏 IC3x4.png</option>
+                  <option value="./src/img/IC4x1.png">📏 IC4x1.png</option>
+                  <option value="./src/img/IC4x2.png">📏 IC4x2.png</option>
+                  <option value="./src/img/IC4x3.png">📏 IC4x3.png</option>
+                </select>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 8px;">
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label style="font-size: 0.75rem;">Ícone</label>
+                  <label style="font-size: 0.75rem;">Tamanho</label>
+                  <select id="token-size-select" name="tokenSize" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                    <option value="1">1x1 (Padrão)</option>
+                    <option value="2">2x2 (Grande)</option>
+                    <option value="3">3x3 (Enorme)</option>
+                    <option value="4">4x4 (Imenso)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 0.75rem;">Emoji</label>
                   <select name="tokenAvatar" class="form-control" style="font-size: 0.8rem; padding: 6px;">
                     <option value="⚔️">⚔️ Guerreiro</option>
                     <option value="🧙‍♂️">🧙‍♂️ Mago</option>
@@ -279,7 +316,7 @@
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
-                  <label style="font-size: 0.75rem;">Cor do Anel</label>
+                  <label style="font-size: 0.75rem;">Cor Anel</label>
                   <input type="color" name="tokenColor" class="form-control" value="#8b5cf6" style="height: 32px; padding: 2px;" />
                 </div>
               </div>
@@ -291,14 +328,17 @@
 
             <h4 style="margin-bottom: 6px; font-size: 0.8rem; color: var(--text-muted);">Tokens Rápidos</h4>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
-              <button class="btn btn-secondary quick-token-btn" data-name="Mago" data-avatar="🧙‍♂️" data-color="#8b5cf6" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
-                🧙‍♂️ Mago Aliado
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="😈" data-img="./src/img/DemonBabau.png" data-size="2" data-color="#ef4444" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+                😈 DemonBabau (2x2)
               </button>
-              <button class="btn btn-secondary quick-token-btn" data-name="Dragão" data-avatar="🐉" data-color="#ef4444" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
-                🐉 Dragão Inimigo
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="🧟" data-img="./src/img/Ghoul.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+                🧟 Ghoul (1x1)
               </button>
-              <button class="btn btn-secondary quick-token-btn" data-name="Goblin" data-avatar="👺" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
-                👺 Goblin Inimigo
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👺" data-img="./src/img/Goblin.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+                👺 Goblin (1x1)
+              </button>
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👹" data-img="./src/img/HobGoblin.png" data-size="2" data-color="#f59e0b" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+                👹 HobGoblin (2x2)
               </button>
             </div>
 
@@ -312,7 +352,17 @@
                   <input type="text" id="edit-token-name" class="form-control" style="font-size: 0.8rem; padding: 6px;" required />
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 8px;">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem;">Tamanho</label>
+                    <select id="edit-token-size" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                      <option value="1">1x1</option>
+                      <option value="2">2x2</option>
+                      <option value="3">3x3</option>
+                      <option value="4">4x4</option>
+                    </select>
+                  </div>
+
                   <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 0.75rem;">Ícone</label>
                     <select id="edit-token-avatar" class="form-control" style="font-size: 0.8rem; padding: 6px;">
@@ -330,7 +380,7 @@
                   </div>
 
                   <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 0.75rem;">Cor do Anel</label>
+                    <label style="font-size: 0.75rem;">Cor Anel</label>
                     <input type="color" id="edit-token-color" class="form-control" style="height: 32px; padding: 2px;" />
                   </div>
                 </div>
