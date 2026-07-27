@@ -1,84 +1,152 @@
-import http from 'http';
-import fs from 'fs';
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*' }
+});
+
 const PORT = process.env.PORT || 3000;
 const DIST_DIR = path.join(__dirname, 'dist');
-const ROOT_DIR = __dirname;
 
-const MIME_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.map': 'application/json; charset=utf-8'
-};
+// Serve static files from dist and root
+app.use(express.static(DIST_DIR));
+app.use(express.static(__dirname));
 
-const server = http.createServer((req, res) => {
-  let safePath = path.normalize(req.url).replace(/^(\.\.[\/\\])+/, '');
-  if (safePath === '/' || !safePath) safePath = '/index.html';
+// In-Memory Room State Storage
+const rooms = {};
 
-  let filePath = path.join(DIST_DIR, safePath);
+io.on('connection', (socket) => {
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
 
-  // 1. Check in dist/
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    // 2. Check in root/
-    const rootFilePath = path.join(ROOT_DIR, safePath);
-    if (fs.existsSync(rootFilePath) && !fs.statSync(rootFilePath).isDirectory()) {
-      filePath = rootFilePath;
-    } else if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
-      filePath = path.join(DIST_DIR, 'index.html');
-    } else if (fs.existsSync(path.join(ROOT_DIR, 'index.html'))) {
-      filePath = path.join(ROOT_DIR, 'index.html');
-    }
-  }
+  socket.on('JOIN_ROOM', ({ code, user }) => {
+    if (!code) return;
+    const roomCode = code.toUpperCase().trim();
+    socket.join(roomCode);
+    socket.roomCode = roomCode;
+    socket.userId = user?.id;
 
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      console.error(`[Server Error] File not found: ${filePath}`, err);
-      res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>500 Internal Server Error</title></head>
-        <body style="font-family: sans-serif; padding: 40px; background: #0f172a; color: #f8fafc;">
-          <h2>⚠️ 500 Internal Server Error</h2>
-          <p>Não foi possível carregar os arquivos da aplicação no servidor.</p>
-          <p><strong>Causa provável:</strong> A pasta de build <code>dist/</code> não foi gerada no Render.</p>
-          <hr style="border-color: #334155;" />
-          <p><strong>Como resolver no Render.com:</strong></p>
-          <ol>
-            <li>Vá no painel do seu serviço no Render -> <strong>Settings</strong>.</li>
-            <li>No campo <strong>Build Command</strong>, insira: <code>npm run build</code></li>
-            <li>No campo <strong>Start Command</strong>, insira: <code>npm start</code></li>
-            <li>Clique em <strong>Save Changes</strong> e faça um novo Deploy (<em>Manual Deploy -> Deploy latest commit</em>).</li>
-          </ol>
-        </body>
-        </html>
-      `);
-      return;
+    if (!rooms[roomCode]) {
+      rooms[roomCode] = {
+        code: roomCode,
+        players: [],
+        turnIndex: 0,
+        sheets: {},
+        board: { cols: 20, rows: 15, bgImageUrl: null, tokens: [] }
+      };
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    const room = rooms[roomCode];
+    if (user && user.id) {
+      const existingIndex = room.players.findIndex(p => p.id === user.id);
+      if (existingIndex === -1) {
+        room.players.push(user);
+      } else {
+        room.players[existingIndex] = user;
+      }
+    }
 
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000'
-    });
-    res.end(data);
+    // Send full initial room state to joining client
+    socket.emit('SYNC_FULL_STATE', room);
+    // Broadcast updated player list to room
+    io.to(roomCode).emit('PLAYERS_CHANGED', room.players);
+  });
+
+  socket.on('REORDER_PLAYERS', (payload) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      if (Array.isArray(payload)) {
+        rooms[code].players = payload;
+      } else if (payload && typeof payload === 'object') {
+        if (Array.isArray(payload.players)) rooms[code].players = payload.players;
+        if (typeof payload.turnIndex === 'number') rooms[code].turnIndex = payload.turnIndex;
+      }
+      io.to(code).emit('REORDER_PLAYERS', payload);
+    }
+  });
+
+  socket.on('ADVANCE_TURN', ({ turnIndex }) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].turnIndex = turnIndex;
+      io.to(code).emit('ADVANCE_TURN', { turnIndex });
+    }
+  });
+
+  socket.on('SHEET_UPDATED', (sheetData) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].sheets[sheetData.slotId] = sheetData;
+      io.to(code).emit('SHEET_UPDATED', sheetData);
+    }
+  });
+
+  socket.on('BOARD_CONFIG_CHANGED', (config) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      Object.assign(rooms[code].board, config);
+      io.to(code).emit('BOARD_CONFIG_CHANGED', config);
+    }
+  });
+
+  socket.on('TOKEN_SPAWNED', (token) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].board.tokens.push(token);
+      io.to(code).emit('TOKEN_SPAWNED', token);
+    }
+  });
+
+  socket.on('TOKEN_MOVED', ({ id, x, y }) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      const tok = rooms[code].board.tokens.find(t => t.id === id);
+      if (tok) {
+        tok.x = x;
+        tok.y = y;
+      }
+      io.to(code).emit('TOKEN_MOVED', { id, x, y });
+    }
+  });
+
+  socket.on('TOKEN_DELETED', ({ id }) => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].board.tokens = rooms[code].board.tokens.filter(t => t.id !== id);
+      io.to(code).emit('TOKEN_DELETED', { id });
+    }
+  });
+
+  socket.on('DICE_ROLLED', (rollData) => {
+    const code = socket.roomCode;
+    if (code) {
+      io.to(code).emit('DICE_ROLLED', rollData);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 VTT Tabletop Server active on port ${PORT}`);
+// SPA Fallback
+app.get('*', (req, res) => {
+  const distIndex = path.join(DIST_DIR, 'index.html');
+  if (fs.existsSync(distIndex)) {
+    res.sendFile(distIndex);
+  } else {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  }
+});
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Express + Socket.IO Server active on port ${PORT}`);
 });
