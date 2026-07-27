@@ -3,7 +3,8 @@ import { network } from './network.js';
 
 /**
  * High-Performance WebGL 2D Tabletop Engine powered by PixiJS
- * Features 1-cell separation lane, token vector movement arrows, and token selection.
+ * Features smooth free-motion token dragging, release snapping, Euclidean distance math,
+ * and multi-segment path waypoints via the Spacebar key.
  */
 
 class BoardEngine {
@@ -50,8 +51,12 @@ class BoardEngine {
     this.selectedTokenId = null;
     this.dragStartGridX = 0;
     this.dragStartGridY = 0;
-    this.dragTargetGridX = 0;
-    this.dragTargetGridY = 0;
+    this.dragCurrentPixelX = 0;
+    this.dragCurrentPixelY = 0;
+    this.dragWaypoints = []; // Array of grid waypoint objects [{ x, y }]
+
+    this.lastMouseX = 0;
+    this.lastMouseY = 0;
 
     // Bindings
     this.onResize = this.resize.bind(this);
@@ -294,13 +299,28 @@ class BoardEngine {
     }
   }
 
+  screenToWorld(screenX, screenY) {
+    return {
+      x: (screenX - this.panX) / this.scale,
+      y: (screenY - this.panY) / this.scale
+    };
+  }
+
+  screenToGrid(screenX, screenY) {
+    const worldPos = this.screenToWorld(screenX, screenY);
+    return {
+      x: Math.floor(worldPos.x / this.cellSize),
+      y: Math.floor(worldPos.y / this.cellSize)
+    };
+  }
+
   bindEvents() {
     window.addEventListener('resize', this.onResize);
 
     const container = this.container;
     if (!container) return;
 
-    // Zoom on Mouse Wheel (Smooth multi-level zoom centered on mouse cursor)
+    // Zoom on Mouse Wheel
     container.addEventListener('wheel', (e) => {
       e.preventDefault();
 
@@ -308,7 +328,6 @@ class BoardEngine {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Clamp deltaY for smooth multi-step zoom on both mouse wheels and trackpads
       const clampedDelta = Math.max(-120, Math.min(120, e.deltaY));
       const zoomFactor = Math.pow(0.999, clampedDelta);
       
@@ -327,19 +346,19 @@ class BoardEngine {
       }
     }, { passive: false });
 
-    // Mouse Panning & Dragging Position Tracker
+    // Mouse Panning & Mouse Down
     container.addEventListener('mousedown', (e) => {
       const rect = container.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+      this.lastMouseX = e.clientX - rect.left;
+      this.lastMouseY = e.clientY - rect.top;
 
       if (!this.draggedToken) {
         this.isPanning = true;
         this.startPanX = e.clientX - this.panX;
-        this.startPanY = e.clientY - this.panY; // Fixed typo (was this.startPanY)
+        this.startPanY = e.clientY - this.panY;
 
         // Deselect token if clicking empty board background
-        const gridPos = this.screenToGrid(mouseX, mouseY);
+        const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
         const clickedToken = this.tokens.slice().reverse().find(t => t.x === gridPos.x && t.y === gridPos.y);
         if (!clickedToken) {
           this.selectToken(null);
@@ -348,17 +367,17 @@ class BoardEngine {
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (this.draggedToken && container) {
+      if (container) {
         const rect = container.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const gridPos = this.screenToGrid(mouseX, mouseY);
+        this.lastMouseX = e.clientX - rect.left;
+        this.lastMouseY = e.clientY - rect.top;
+      }
 
-        if (gridPos.x !== this.dragTargetGridX || gridPos.y !== this.dragTargetGridY) {
-          this.dragTargetGridX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
-          this.dragTargetGridY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
-          this.moveToken(this.draggedToken.id, this.dragTargetGridX, this.dragTargetGridY, true);
-        }
+      if (this.draggedToken && container) {
+        const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+        this.dragCurrentPixelX = worldPos.x;
+        this.dragCurrentPixelY = worldPos.y;
+        this.render();
       } else if (this.isPanning) {
         this.panX = e.clientX - this.startPanX;
         this.panY = e.clientY - this.startPanY;
@@ -366,20 +385,36 @@ class BoardEngine {
       }
     });
 
+    // Mouse Up: Snap to Grid on Release
     window.addEventListener('mouseup', () => {
+      if (this.draggedToken) {
+        const gridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
+        const gridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
+
+        this.moveToken(this.draggedToken.id, gridX, gridY, true);
+        this.draggedToken = null;
+        this.dragWaypoints = [];
+      }
       this.isPanning = false;
-      this.draggedToken = null;
       this.render();
     });
-  }
 
-  screenToGrid(screenX, screenY) {
-    const boardX = (screenX - this.panX) / this.scale;
-    const boardY = (screenY - this.panY) / this.scale;
-    return {
-      x: Math.floor(boardX / this.cellSize),
-      y: Math.floor(boardY / this.cellSize)
-    };
+    // Spacebar Keydown Handler: Insert Waypoint
+    window.addEventListener('keydown', (e) => {
+      if ((e.code === 'Space' || e.key === ' ') && this.draggedToken) {
+        e.preventDefault();
+
+        const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
+        const targetX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
+        const targetY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
+
+        const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
+        if (!lastWp || lastWp.x !== targetX || lastWp.y !== targetY) {
+          this.dragWaypoints.push({ x: targetX, y: targetY });
+          this.render();
+        }
+      }
+    });
   }
 
   // PIXI.JS RENDER PIPELINE
@@ -406,7 +441,7 @@ class BoardEngine {
     bgGfx.drawRect(0, 0, totalW, totalH);
     bgGfx.endFill();
 
-    // 1-Cell Separation Lane Ring (Faixa de Separação de Grid com Tom Cyan Translúcido)
+    // 1-Cell Separation Lane Ring
     const gapX = (this.mapOriginX - this.gapSize) * this.cellSize;
     const gapY = (this.mapOriginY - this.gapSize) * this.cellSize;
     const gapW = (this.mapCols + this.gapSize * 2) * this.cellSize;
@@ -422,7 +457,7 @@ class BoardEngine {
     bgGfx.endFill();
     stage.addChild(bgGfx);
 
-    // Layer 1: Map Background Sprite (Anchored top-left, exact cell dimensions)
+    // Layer 1: Map Background Sprite
     if (this.bgImageUrl) {
       const texture = PIXI.Texture.from(this.bgImageUrl);
       const sprite = new PIXI.Sprite(texture);
@@ -441,7 +476,7 @@ class BoardEngine {
       stage.addChild(mapOutline);
     }
 
-    // Layer 2: Character Sheet Slots (17x22 each, aspect ratio contain)
+    // Layer 2: Character Sheet Slots
     const slots = this.getSlots();
     const sheets = state.characterSheets || {};
 
@@ -586,8 +621,11 @@ class BoardEngine {
 
     this.tokens.forEach(t => {
       const tokGroup = new PIXI.Container();
-      const centerX = t.x * this.cellSize + this.cellSize / 2;
-      const centerY = t.y * this.cellSize + this.cellSize / 2;
+      
+      // If token is currently being dragged, render at smooth free pixel position
+      const isBeingDragged = this.draggedToken && this.draggedToken.id === t.id;
+      const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + 0.5) * this.cellSize;
+      const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + 0.5) * this.cellSize;
       const radius = (this.cellSize / 2) * 0.8;
 
       tokGroup.x = centerX;
@@ -598,7 +636,7 @@ class BoardEngine {
       // Circle Base Graphic
       const circleGfx = new PIXI.Graphics();
       const hexColor = parseInt((t.color || '#8b5cf6').replace('#', '0x'), 16);
-      circleGfx.beginFill(hexColor);
+      circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
       circleGfx.drawCircle(0, 0, radius);
       circleGfx.endFill();
 
@@ -645,9 +683,19 @@ class BoardEngine {
           this.draggedToken = t;
           this.dragStartGridX = t.x;
           this.dragStartGridY = t.y;
-          this.dragTargetGridX = t.x;
-          this.dragTargetGridY = t.y;
+          this.dragWaypoints = [{ x: t.x, y: t.y }];
+
+          const origEvent = e.data?.originalEvent || e;
+          const rect = this.container.getBoundingClientRect();
+          this.lastMouseX = (origEvent.clientX || 0) - rect.left;
+          this.lastMouseY = (origEvent.clientY || 0) - rect.top;
+
+          const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+          this.dragCurrentPixelX = worldPos.x;
+          this.dragCurrentPixelY = worldPos.y;
+
           e.stopPropagation();
+          this.render();
         }
       });
 
@@ -656,62 +704,101 @@ class BoardEngine {
 
     stage.addChild(tokensContainer);
 
-    // Layer 5: Vector Arrow & Distance Indicator During Dragging
-    if (this.draggedToken && (this.dragTargetGridX !== this.dragStartGridX || this.dragTargetGridY !== this.dragStartGridY)) {
+    // Layer 5: Vector Arrow, Waypoint Nodes & Rounded Euclidean Distance
+    if (this.draggedToken) {
       const vectorGfx = new PIXI.Graphics();
-      const startPxX = (this.dragStartGridX + 0.5) * this.cellSize;
-      const startPxY = (this.dragStartGridY + 0.5) * this.cellSize;
-      const endPxX = (this.dragTargetGridX + 0.5) * this.cellSize;
-      const endPxY = (this.dragTargetGridY + 0.5) * this.cellSize;
+      vectorGfx.lineStyle(3.5, 0x38bdf8, 0.95);
 
-      // Glow Vector Line
-      vectorGfx.lineStyle(4, 0x38bdf8, 0.9);
-      vectorGfx.moveTo(startPxX, startPxY);
-      vectorGfx.lineTo(endPxX, endPxY);
+      let accumulatedDist = 0;
 
-      // Vector Arrowhead
-      const angle = Math.atan2(endPxY - startPxY, endPxX - startPxX);
+      // 1. Draw completed waypoint segments
+      for (let i = 0; i < this.dragWaypoints.length - 1; i++) {
+        const wp1 = this.dragWaypoints[i];
+        const wp2 = this.dragWaypoints[i + 1];
+
+        const p1X = (wp1.x + 0.5) * this.cellSize;
+        const p1Y = (wp1.y + 0.5) * this.cellSize;
+        const p2X = (wp2.x + 0.5) * this.cellSize;
+        const p2Y = (wp2.y + 0.5) * this.cellSize;
+
+        vectorGfx.moveTo(p1X, p1Y);
+        vectorGfx.lineTo(p2X, p2Y);
+
+        accumulatedDist += Math.hypot(wp2.x - wp1.x, wp2.y - wp1.y);
+      }
+
+      // 2. Draw current active segment from last waypoint to current free cursor position
+      const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
+      const lastPxX = (lastWp.x + 0.5) * this.cellSize;
+      const lastPxY = (lastWp.y + 0.5) * this.cellSize;
+      const currPxX = this.dragCurrentPixelX;
+      const currPxY = this.dragCurrentPixelY;
+
+      vectorGfx.moveTo(lastPxX, lastPxY);
+      vectorGfx.lineTo(currPxX, currPxY);
+
+      // Active segment distance in grid units
+      const activeGridX = currPxX / this.cellSize - 0.5;
+      const activeGridY = currPxY / this.cellSize - 0.5;
+      accumulatedDist += Math.hypot(activeGridX - lastWp.x, activeGridY - lastWp.y);
+
+      // Vector Arrowhead at current cursor position
+      const angle = Math.atan2(currPxY - lastPxY, currPxX - lastPxX);
       const arrowSize = 14;
       vectorGfx.beginFill(0x38bdf8, 1);
       vectorGfx.drawPolygon([
-        endPxX, endPxY,
-        endPxX - arrowSize * Math.cos(angle - Math.PI / 6), endPxY - arrowSize * Math.sin(angle - Math.PI / 6),
-        endPxX - arrowSize * Math.cos(angle + Math.PI / 6), endPxY - arrowSize * Math.sin(angle + Math.PI / 6)
+        currPxX, currPxY,
+        currPxX - arrowSize * Math.cos(angle - Math.PI / 6), currPxY - arrowSize * Math.sin(angle - Math.PI / 6),
+        currPxX - arrowSize * Math.cos(angle + Math.PI / 6), currPxY - arrowSize * Math.sin(angle + Math.PI / 6)
       ]);
       vectorGfx.endFill();
 
-      // Start Position Marker Circle
-      vectorGfx.lineStyle(2, 0x38bdf8, 0.8);
-      vectorGfx.beginFill(0x0f172a, 0.7);
-      vectorGfx.drawCircle(startPxX, startPxY, 8);
-      vectorGfx.endFill();
+      // Waypoint Node Markers (Snap circles with step numbers)
+      for (let i = 0; i < this.dragWaypoints.length; i++) {
+        const wp = this.dragWaypoints[i];
+        const wpPxX = (wp.x + 0.5) * this.cellSize;
+        const wpPxY = (wp.y + 0.5) * this.cellSize;
+
+        vectorGfx.lineStyle(2, 0x38bdf8, 1);
+        vectorGfx.beginFill(i === 0 ? 0x0f172a : 0x0284c7, 0.95);
+        vectorGfx.drawCircle(wpPxX, wpPxY, i === 0 ? 7 : 11);
+        vectorGfx.endFill();
+
+        if (i > 0) {
+          const nodeText = new PIXI.Text(`${i}`, {
+            fontFamily: 'sans-serif',
+            fontSize: 10,
+            fontWeight: 'bold',
+            fill: 0xffffff
+          });
+          nodeText.anchor.set(0.5);
+          nodeText.x = wpPxX;
+          nodeText.y = wpPxY;
+          stage.addChild(nodeText);
+        }
+      }
 
       stage.addChild(vectorGfx);
 
-      // Distance Badge Calculation (Chebyshev grid cells distance)
-      const dx = Math.abs(this.dragTargetGridX - this.dragStartGridX);
-      const dy = Math.abs(this.dragTargetGridY - this.dragStartGridY);
-      const distCells = Math.max(dx, dy);
-
-      const midPxX = (startPxX + endPxX) / 2;
-      const midPxY = (startPxY + endPxY) / 2;
+      // Rounded Integer Euclidean Distance (e.g., 10 down + 10 right = 14)
+      const roundedDist = Math.round(accumulatedDist);
 
       const badgeGfx = new PIXI.Graphics();
       badgeGfx.beginFill(0x0369a1, 0.95);
       badgeGfx.lineStyle(1.5, 0x38bdf8, 1);
-      badgeGfx.drawRoundedRect(midPxX - 34, midPxY - 14, 68, 28, 6);
+      badgeGfx.drawRoundedRect(currPxX - 34, currPxY - 42, 68, 28, 6);
       badgeGfx.endFill();
       stage.addChild(badgeGfx);
 
-      const distText = new PIXI.Text(`${distCells} quad.`, {
+      const distText = new PIXI.Text(`${roundedDist} quad.`, {
         fontFamily: 'sans-serif',
         fontSize: 11,
         fontWeight: 'bold',
         fill: 0xffffff
       });
       distText.anchor.set(0.5);
-      distText.x = midPxX;
-      distText.y = midPxY;
+      distText.x = currPxX;
+      distText.y = currPxY - 28;
       stage.addChild(distText);
     }
   }
