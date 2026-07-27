@@ -3,8 +3,7 @@ import { network } from './network.js';
 
 /**
  * High-Performance WebGL 2D Tabletop Engine powered by PixiJS
- * Features smooth free-motion token dragging, release snapping, Euclidean distance math,
- * and multi-segment path waypoints via the Spacebar key.
+ * Includes Master Drawing Tools: freehand, line, rect, circle, eraser & real-time Socket.IO sync.
  */
 
 class BoardEngine {
@@ -54,6 +53,19 @@ class BoardEngine {
     this.dragCurrentPixelX = 0;
     this.dragCurrentPixelY = 0;
     this.dragWaypoints = []; // Array of grid waypoint objects [{ x, y }]
+
+    // Master Drawing Tools State
+    this.drawings = [];
+    this.currentTool = 'select'; // 'select' | 'freehand' | 'line' | 'rect' | 'circle' | 'eraser'
+    this.drawColor = '#ef4444';
+    this.drawWidth = 4;
+    this.drawFilled = false;
+    this.isDrawing = false;
+    this.activeDrawingPoints = [];
+    this.drawStartWorldX = 0;
+    this.drawStartWorldY = 0;
+    this.drawCurrentWorldX = 0;
+    this.drawCurrentWorldY = 0;
 
     this.lastMouseX = 0;
     this.lastMouseY = 0;
@@ -229,6 +241,79 @@ class BoardEngine {
     }
   }
 
+  // DRAWING TOOL CONFIGURATION
+  setDrawingTool(tool) {
+    this.currentTool = tool || 'select';
+    this.render();
+  }
+
+  setDrawingColor(color) {
+    this.drawColor = color || '#ef4444';
+  }
+
+  setDrawingWidth(width) {
+    this.drawWidth = width || 4;
+  }
+
+  setDrawingFill(filled) {
+    this.drawFilled = Boolean(filled);
+  }
+
+  addDrawing(drawing, broadcast = true) {
+    this.drawings.push(drawing);
+    this.render();
+
+    if (broadcast) {
+      network.broadcast('DRAWING_ADDED', drawing);
+    }
+  }
+
+  deleteDrawing(drawingId, broadcast = true) {
+    this.drawings = this.drawings.filter(d => d.id !== drawingId);
+    this.render();
+
+    if (broadcast) {
+      network.broadcast('DRAWING_DELETED', { id: drawingId });
+    }
+  }
+
+  clearDrawings(broadcast = true) {
+    this.drawings = [];
+    this.render();
+
+    if (broadcast) {
+      network.broadcast('DRAWINGS_CLEARED');
+    }
+  }
+
+  eraseDrawingAt(worldX, worldY) {
+    const eraseRadius = 16;
+    const toDelete = this.drawings.find(d => {
+      if (d.type === 'freehand' && d.points) {
+        return d.points.some(p => Math.hypot(p.x - worldX, p.y - worldY) < eraseRadius + (d.width || 4));
+      } else if (d.type === 'line') {
+        const midX = (d.x1 + d.x2) / 2;
+        const midY = (d.y1 + d.y2) / 2;
+        return Math.hypot(midX - worldX, midY - worldY) < Math.hypot(d.x2 - d.x1, d.y2 - d.y1) / 2 + 10;
+      } else if (d.type === 'rect') {
+        const minX = Math.min(d.x1, d.x2);
+        const maxX = Math.max(d.x1, d.x2);
+        const minY = Math.min(d.y1, d.y2);
+        const maxY = Math.max(d.y1, d.y2);
+        return worldX >= minX - 10 && worldX <= maxX + 10 && worldY >= minY - 10 && worldY <= maxY + 10;
+      } else if (d.type === 'circle') {
+        const radius = Math.hypot(d.x2 - d.x1, d.y2 - d.y1);
+        const dist = Math.hypot(worldX - d.x1, worldY - d.y1);
+        return Math.abs(dist - radius) < 16 || (d.filled && dist <= radius);
+      }
+      return false;
+    });
+
+    if (toDelete) {
+      this.deleteDrawing(toDelete.id, true);
+    }
+  }
+
   selectToken(tokenId) {
     this.selectedTokenId = tokenId;
     const token = this.tokens.find(t => t.id === tokenId);
@@ -346,18 +431,35 @@ class BoardEngine {
       }
     }, { passive: false });
 
-    // Mouse Panning & Mouse Down
+    // Mouse Down Handler (Panning & Drawing Tools)
     container.addEventListener('mousedown', (e) => {
       const rect = container.getBoundingClientRect();
       this.lastMouseX = e.clientX - rect.left;
       this.lastMouseY = e.clientY - rect.top;
+
+      const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+
+      if (this.currentTool !== 'select' && !this.draggedToken) {
+        // Start Drawing Mode
+        this.isDrawing = true;
+        this.drawStartWorldX = worldPos.x;
+        this.drawStartWorldY = worldPos.y;
+        this.drawCurrentWorldX = worldPos.x;
+        this.drawCurrentWorldY = worldPos.y;
+        this.activeDrawingPoints = [{ x: worldPos.x, y: worldPos.y }];
+
+        if (this.currentTool === 'eraser') {
+          this.eraseDrawingAt(worldPos.x, worldPos.y);
+        }
+        this.render();
+        return;
+      }
 
       if (!this.draggedToken) {
         this.isPanning = true;
         this.startPanX = e.clientX - this.panX;
         this.startPanY = e.clientY - this.panY;
 
-        // Deselect token if clicking empty board background
         const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
         const clickedToken = this.tokens.slice().reverse().find(t => t.x === gridPos.x && t.y === gridPos.y);
         if (!clickedToken) {
@@ -373,11 +475,24 @@ class BoardEngine {
         this.lastMouseY = e.clientY - rect.top;
       }
 
-      if (this.draggedToken && container) {
-        const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+      const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
+
+      if (this.isDrawing) {
+        this.drawCurrentWorldX = worldPos.x;
+        this.drawCurrentWorldY = worldPos.y;
+
+        if (this.currentTool === 'freehand') {
+          this.activeDrawingPoints.push({ x: worldPos.x, y: worldPos.y });
+        } else if (this.currentTool === 'eraser') {
+          this.eraseDrawingAt(worldPos.x, worldPos.y);
+        }
+        this.render();
+
+      } else if (this.draggedToken && container) {
         this.dragCurrentPixelX = worldPos.x;
         this.dragCurrentPixelY = worldPos.y;
         this.render();
+
       } else if (this.isPanning) {
         this.panX = e.clientX - this.startPanX;
         this.panY = e.clientY - this.startPanY;
@@ -385,8 +500,59 @@ class BoardEngine {
       }
     });
 
-    // Mouse Up: Snap to Grid on Release
+    // Mouse Up: Commit Drawing or Snap Token
     window.addEventListener('mouseup', () => {
+      if (this.isDrawing) {
+        this.isDrawing = false;
+        const drawingId = 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+        if (this.currentTool === 'freehand' && this.activeDrawingPoints.length > 1) {
+          this.addDrawing({
+            id: drawingId,
+            type: 'freehand',
+            color: this.drawColor,
+            width: this.drawWidth,
+            points: [...this.activeDrawingPoints]
+          }, true);
+        } else if (this.currentTool === 'line') {
+          this.addDrawing({
+            id: drawingId,
+            type: 'line',
+            color: this.drawColor,
+            width: this.drawWidth,
+            x1: this.drawStartWorldX,
+            y1: this.drawStartWorldY,
+            x2: this.drawCurrentWorldX,
+            y2: this.drawCurrentWorldY
+          }, true);
+        } else if (this.currentTool === 'rect') {
+          this.addDrawing({
+            id: drawingId,
+            type: 'rect',
+            color: this.drawColor,
+            width: this.drawWidth,
+            filled: this.drawFilled,
+            x1: this.drawStartWorldX,
+            y1: this.drawStartWorldY,
+            x2: this.drawCurrentWorldX,
+            y2: this.drawCurrentWorldY
+          }, true);
+        } else if (this.currentTool === 'circle') {
+          this.addDrawing({
+            id: drawingId,
+            type: 'circle',
+            color: this.drawColor,
+            width: this.drawWidth,
+            filled: this.drawFilled,
+            x1: this.drawStartWorldX,
+            y1: this.drawStartWorldY,
+            x2: this.drawCurrentWorldX,
+            y2: this.drawCurrentWorldY
+          }, true);
+        }
+        this.activeDrawingPoints = [];
+      }
+
       if (this.draggedToken) {
         const gridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
         const gridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
@@ -395,6 +561,7 @@ class BoardEngine {
         this.draggedToken = null;
         this.dragWaypoints = [];
       }
+
       this.isPanning = false;
       this.render();
     });
@@ -475,6 +642,65 @@ class BoardEngine {
       mapOutline.drawRect(mapX, mapY, sprite.width, sprite.height);
       stage.addChild(mapOutline);
     }
+
+    // Layer 1.5: Master Drawings Container
+    const drawingsGfx = new PIXI.Graphics();
+
+    const drawShape = (gfx, d) => {
+      const hexColor = parseInt((d.color || '#ef4444').replace('#', '0x'), 16);
+      gfx.lineStyle(d.width || 4, hexColor, 1);
+
+      if (d.type === 'freehand' && d.points && d.points.length > 0) {
+        gfx.moveTo(d.points[0].x, d.points[0].y);
+        for (let i = 1; i < d.points.length; i++) {
+          gfx.lineTo(d.points[i].x, d.points[i].y);
+        }
+      } else if (d.type === 'line') {
+        gfx.moveTo(d.x1, d.y1);
+        gfx.lineTo(d.x2, d.y2);
+      } else if (d.type === 'rect') {
+        const x = Math.min(d.x1, d.x2);
+        const y = Math.min(d.y1, d.y2);
+        const w = Math.abs(d.x2 - d.x1);
+        const h = Math.abs(d.y2 - d.y1);
+        if (d.filled) {
+          gfx.beginFill(hexColor, 0.35);
+          gfx.drawRect(x, y, w, h);
+          gfx.endFill();
+        } else {
+          gfx.drawRect(x, y, w, h);
+        }
+      } else if (d.type === 'circle') {
+        const radius = Math.hypot(d.x2 - d.x1, d.y2 - d.y1);
+        if (d.filled) {
+          gfx.beginFill(hexColor, 0.35);
+          gfx.drawCircle(d.x1, d.y1, radius);
+          gfx.endFill();
+        } else {
+          gfx.drawCircle(d.x1, d.y1, radius);
+        }
+      }
+    };
+
+    this.drawings.forEach(d => drawShape(drawingsGfx, d));
+
+    // Live Preview of Current Active Drawing
+    if (this.isDrawing && this.currentTool !== 'select' && this.currentTool !== 'eraser') {
+      const previewDrawing = {
+        type: this.currentTool,
+        color: this.drawColor,
+        width: this.drawWidth,
+        filled: this.drawFilled,
+        x1: this.drawStartWorldX,
+        y1: this.drawStartWorldY,
+        x2: this.drawCurrentWorldX,
+        y2: this.drawCurrentWorldY,
+        points: this.activeDrawingPoints
+      };
+      drawShape(drawingsGfx, previewDrawing);
+    }
+
+    stage.addChild(drawingsGfx);
 
     // Layer 2: Character Sheet Slots
     const slots = this.getSlots();
@@ -622,7 +848,6 @@ class BoardEngine {
     this.tokens.forEach(t => {
       const tokGroup = new PIXI.Container();
       
-      // If token is currently being dragged, render at smooth free pixel position
       const isBeingDragged = this.draggedToken && this.draggedToken.id === t.id;
       const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + 0.5) * this.cellSize;
       const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + 0.5) * this.cellSize;
@@ -679,7 +904,7 @@ class BoardEngine {
 
         const isMaster = state.currentUser?.isMaster || state.activeLobby?.masterId === state.currentUser?.id;
         const canDrag = isMaster || t.ownerId === state.currentUser?.id;
-        if (canDrag) {
+        if (canDrag && this.currentTool === 'select') {
           this.draggedToken = t;
           this.dragStartGridX = t.x;
           this.dragStartGridY = t.y;

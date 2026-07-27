@@ -80,8 +80,11 @@ class NetworkEngine {
             }
             if (Array.isArray(room.board.tokens)) {
               boardEngine.tokens = room.board.tokens;
-              boardEngine.render();
             }
+            if (Array.isArray(room.board.drawings)) {
+              boardEngine.drawings = room.board.drawings;
+            }
+            boardEngine.render();
           }
         }
       });
@@ -134,6 +137,18 @@ class NetworkEngine {
 
       this.socket.on('TOKEN_DELETED', ({ id }) => {
         if (id) boardEngine.deleteToken(id, false);
+      });
+
+      this.socket.on('DRAWING_ADDED', (drawing) => {
+        if (drawing) boardEngine.addDrawing(drawing, false);
+      });
+
+      this.socket.on('DRAWING_DELETED', ({ id }) => {
+        if (id) boardEngine.deleteDrawing(id, false);
+      });
+
+      this.socket.on('DRAWINGS_CLEARED', () => {
+        boardEngine.clearDrawings(false);
       });
 
       this.socket.on('DICE_ROLLED', (rollData) => {

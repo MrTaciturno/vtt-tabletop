@@ -176,6 +176,7 @@
             <button class="menu-tab-btn active" data-tab="map">🗺️ Mapa</button>
             <button class="menu-tab-btn" data-tab="sheets">📋 Planilhas</button>
             <button class="menu-tab-btn" data-tab="tokens">👾 Tokens</button>
+            <button class="menu-tab-btn" data-tab="draw">🎨 Desenhos</button>
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
@@ -335,6 +336,69 @@
                 </div>
               </form>
             </div>
+          <!-- TAB: Master Drawing Tools -->
+          <div class="tab-pane hidden" id="tab-pane-draw">
+            <h4 style="margin-bottom: 8px; font-size: 0.85rem; color: var(--accent-gold);">🎨 Ferramentas de Desenho (Mestre)</h4>
+            
+            <!-- Tool Buttons Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px;">
+              <button class="btn btn-secondary draw-tool-btn active" data-tool="select" style="font-size: 0.75rem; padding: 6px;">
+                🖐️ Pan / Selecionar
+              </button>
+              <button class="btn btn-secondary draw-tool-btn" data-tool="freehand" style="font-size: 0.75rem; padding: 6px;">
+                ✏️ Linha Livre
+              </button>
+              <button class="btn btn-secondary draw-tool-btn" data-tool="line" style="font-size: 0.75rem; padding: 6px;">
+                📏 Linha Reta
+              </button>
+              <button class="btn btn-secondary draw-tool-btn" data-tool="rect" style="font-size: 0.75rem; padding: 6px;">
+                🔲 Retângulo
+              </button>
+              <button class="btn btn-secondary draw-tool-btn" data-tool="circle" style="font-size: 0.75rem; padding: 6px;">
+                ⭕ Círculo
+              </button>
+              <button class="btn btn-secondary draw-tool-btn" data-tool="eraser" style="font-size: 0.75rem; padding: 6px;">
+                🧹 Borracha
+              </button>
+            </div>
+
+            <!-- Color Palette -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 0.75rem;">Cor do Desenho</label>
+              <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                <input type="color" id="draw-color-picker" class="form-control" value="#ef4444" style="width: 40px; height: 32px; padding: 2px; cursor: pointer;" />
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                  <button class="color-preset-btn" data-color="#ef4444" style="width: 22px; height: 22px; border-radius: 50%; background: #ef4444; border: 1px solid #fff; cursor: pointer;"></button>
+                  <button class="color-preset-btn" data-color="#3b82f6" style="width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; border: 1px solid #fff; cursor: pointer;"></button>
+                  <button class="color-preset-btn" data-color="#10b981" style="width: 22px; height: 22px; border-radius: 50%; background: #10b981; border: 1px solid #fff; cursor: pointer;"></button>
+                  <button class="color-preset-btn" data-color="#f59e0b" style="width: 22px; height: 22px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; cursor: pointer;"></button>
+                  <button class="color-preset-btn" data-color="#ffffff" style="width: 22px; height: 22px; border-radius: 50%; background: #ffffff; border: 1px solid #fff; cursor: pointer;"></button>
+                  <button class="color-preset-btn" data-color="#000000" style="width: 22px; height: 22px; border-radius: 50%; background: #000000; border: 1px solid #fff; cursor: pointer;"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stroke Width -->
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label for="draw-width-select" style="font-size: 0.75rem;">Espessura do Traço</label>
+              <select id="draw-width-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                <option value="2">Fino (2px)</option>
+                <option value="4" selected>Médio (4px)</option>
+                <option value="8">Grosso (8px)</option>
+                <option value="12">Extra Grosso (12px)</option>
+              </select>
+            </div>
+
+            <!-- Fill Toggle -->
+            <div class="form-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="draw-fill-checkbox" style="cursor: pointer;" />
+              <label for="draw-fill-checkbox" style="font-size: 0.75rem; margin: 0; cursor: pointer;">Preenchimento Translúcido</label>
+            </div>
+
+            <!-- Clear All Drawings -->
+            <button class="btn btn-danger" id="btn-clear-drawings" style="width: 100%; font-size: 0.75rem; padding: 6px;">
+              🗑️ Limpar Todos os Desenhos
+            </button>
           </div>
 
           <!-- TAB 3: Dice Roller & Roll Log -->

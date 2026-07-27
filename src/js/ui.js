@@ -265,6 +265,51 @@ class UIController {
       this.showToast(`Token removido.`, 'info');
     });
 
+    // Drawing Tool Selector Buttons
+    document.querySelectorAll('.draw-tool-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.draw-tool-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+
+        const tool = e.currentTarget.dataset.tool;
+        boardEngine.setDrawingTool(tool);
+      });
+    });
+
+    // Color Picker & Presets
+    const drawColorPicker = document.getElementById('draw-color-picker');
+    if (drawColorPicker) {
+      drawColorPicker.addEventListener('input', (e) => {
+        boardEngine.setDrawingColor(e.target.value);
+      });
+    }
+
+    document.querySelectorAll('.color-preset-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const color = e.currentTarget.dataset.color;
+        if (drawColorPicker) drawColorPicker.value = color;
+        boardEngine.setDrawingColor(color);
+      });
+    });
+
+    // Stroke Width
+    document.getElementById('draw-width-select')?.addEventListener('change', (e) => {
+      boardEngine.setDrawingWidth(Number(e.target.value));
+    });
+
+    // Fill Checkbox
+    document.getElementById('draw-fill-checkbox')?.addEventListener('change', (e) => {
+      boardEngine.setDrawingFill(e.target.checked);
+    });
+
+    // Clear All Drawings
+    document.getElementById('btn-clear-drawings')?.addEventListener('click', () => {
+      if (confirm('Tem certeza que deseja apagar todos os desenhos do tabuleiro?')) {
+        boardEngine.clearDrawings(true);
+        this.showToast('Desenhos apagados.', 'info');
+      }
+    });
+
     // Dice Roll Controls (d4, d6, d8, d10, d12, d100)
     document.querySelectorAll('.dice-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {

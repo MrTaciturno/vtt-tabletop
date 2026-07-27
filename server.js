@@ -40,7 +40,7 @@ io.on('connection', (socket) => {
         players: [],
         turnIndex: 0,
         sheets: {},
-        board: { cols: 20, rows: 15, bgImageUrl: null, tokens: [] }
+        board: { cols: 20, rows: 15, bgImageUrl: null, tokens: [], drawings: [] }
       };
     }
 
@@ -133,6 +133,31 @@ io.on('connection', (socket) => {
     if (code && rooms[code]) {
       rooms[code].board.tokens = rooms[code].board.tokens.filter(t => t.id !== id);
       io.to(code).emit('TOKEN_DELETED', { id });
+    }
+  });
+
+  socket.on('DRAWING_ADDED', (drawing) => {
+    const code = socket.roomCode;
+    if (code && rooms[code] && drawing) {
+      if (!rooms[code].board.drawings) rooms[code].board.drawings = [];
+      rooms[code].board.drawings.push(drawing);
+      io.to(code).emit('DRAWING_ADDED', drawing);
+    }
+  });
+
+  socket.on('DRAWING_DELETED', ({ id }) => {
+    const code = socket.roomCode;
+    if (code && rooms[code] && rooms[code].board.drawings) {
+      rooms[code].board.drawings = rooms[code].board.drawings.filter(d => d.id !== id);
+      io.to(code).emit('DRAWING_DELETED', { id });
+    }
+  });
+
+  socket.on('DRAWINGS_CLEARED', () => {
+    const code = socket.roomCode;
+    if (code && rooms[code]) {
+      rooms[code].board.drawings = [];
+      io.to(code).emit('DRAWINGS_CLEARED');
     }
   });
 
