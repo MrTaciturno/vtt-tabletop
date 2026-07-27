@@ -300,7 +300,7 @@ class BoardEngine {
     const container = this.container;
     if (!container) return;
 
-    // Zoom on Mouse Wheel (Mathematically exact zoom centered on mouse cursor)
+    // Zoom on Mouse Wheel (Smooth multi-level zoom centered on mouse cursor)
     container.addEventListener('wheel', (e) => {
       e.preventDefault();
 
@@ -308,13 +308,14 @@ class BoardEngine {
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      const delta = -Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 100);
-      const zoomFactor = Math.pow(1.0015, delta * 30);
+      // Clamp deltaY for smooth multi-step zoom on both mouse wheels and trackpads
+      const clampedDelta = Math.max(-120, Math.min(120, e.deltaY));
+      const zoomFactor = Math.pow(0.999, clampedDelta);
       
       const targetScale = this.scale * zoomFactor;
       const newScale = Math.max(this.minScale, Math.min(this.maxScale, targetScale));
 
-      if (newScale !== this.scale) {
+      if (Math.abs(newScale - this.scale) > 0.0001) {
         const worldMouseX = (mouseX - this.panX) / this.scale;
         const worldMouseY = (mouseY - this.panY) / this.scale;
 
