@@ -395,6 +395,13 @@ class BoardEngine {
     };
   }
 
+  worldToScreen(worldX, worldY) {
+    return {
+      x: worldX * this.scale + this.panX,
+      y: worldY * this.scale + this.panY
+    };
+  }
+
   screenToGrid(screenX, screenY) {
     const worldPos = this.screenToWorld(screenX, screenY);
     return {
@@ -726,32 +733,63 @@ class BoardEngine {
 
       const slotGfx = new PIXI.Graphics();
 
-      if (sheet && sheet.imageUrl) {
+      const bgImg = sheet?.poiseData?.bgImage || sheet?.imageUrl;
+
+      if (sheet && bgImg) {
         slotGfx.beginFill(0x0f172a, 0.95);
         slotGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         slotGfx.endFill();
         slotContainer.addChild(slotGfx);
 
-        const sheetTexture = PIXI.Texture.from(sheet.imageUrl);
+        const sheetTexture = PIXI.Texture.from(bgImg);
         const sheetSprite = new PIXI.Sprite(sheetTexture);
-
-        sheetTexture.baseTexture.on('loaded', () => {
-          const imgRatio = sheetSprite.texture.width / sheetSprite.texture.height;
-          const slotRatio = slotPixelW / slotPixelH;
-          if (imgRatio > slotRatio) {
-            sheetSprite.width = slotPixelW;
-            sheetSprite.height = slotPixelW / imgRatio;
-            sheetSprite.y = (slotPixelH - sheetSprite.height) / 2;
-          } else {
-            sheetSprite.height = slotPixelH;
-            sheetSprite.width = slotPixelH * imgRatio;
-            sheetSprite.x = (slotPixelW - sheetSprite.width) / 2;
-          }
-        });
-
         sheetSprite.width = slotPixelW;
         sheetSprite.height = slotPixelH;
         slotContainer.addChild(sheetSprite);
+
+        // Render Equipment Items from poiseData.items (using src/Equip/${imageName}.png)
+        if (sheet.poiseData && sheet.poiseData.items && Array.isArray(sheet.poiseData.items)) {
+          sheet.poiseData.items.forEach(it => {
+            if (it.imageName) {
+              const itemImgUrl = `./src/Equip/${it.imageName}.png`;
+              const itemTex = PIXI.Texture.from(itemImgUrl);
+              const itemSprite = new PIXI.Sprite(itemTex);
+
+              const itemPxX = (it.x / 100) * slotPixelW;
+              const itemPxY = (it.y / 100) * slotPixelH;
+              const itemPxW = (it.w / 100) * slotPixelW;
+              const itemPxH = (it.h / 100) * slotPixelH;
+
+              itemSprite.x = itemPxX;
+              itemSprite.y = itemPxY;
+              itemSprite.width = itemPxW;
+              itemSprite.height = itemPxH;
+              slotContainer.addChild(itemSprite);
+            }
+          });
+        }
+
+        // Render Fillable Fields from poiseData.fields
+        if (sheet.poiseData && sheet.poiseData.fields && Array.isArray(sheet.poiseData.fields)) {
+          sheet.poiseData.fields.forEach(f => {
+            const fieldVal = (sheet.fieldValues && sheet.fieldValues[f.id] !== undefined) ? sheet.fieldValues[f.id] : (f.value || '');
+            if (fieldVal) {
+              const fieldPxX = (f.x / 100) * slotPixelW;
+              const fieldPxY = (f.y / 100) * slotPixelH;
+              const calcFontSize = Math.max(9, Math.round((f.fontSize || 12) * (slotPixelW / 650)));
+
+              const fieldText = new PIXI.Text(String(fieldVal), {
+                fontFamily: 'sans-serif',
+                fontSize: calcFontSize,
+                fontWeight: 'bold',
+                fill: 0x0f172a
+              });
+              fieldText.x = fieldPxX + 2;
+              fieldText.y = fieldPxY + 1;
+              slotContainer.addChild(fieldText);
+            }
+          });
+        }
 
         const borderGfx = new PIXI.Graphics();
         borderGfx.lineStyle(3, 0x22c55e, 0.8);
@@ -762,7 +800,7 @@ class BoardEngine {
         borderGfx.endFill();
         slotContainer.addChild(borderGfx);
 
-        const labelText = new PIXI.Text(`📋 Planilha: ${sheet.ownerName}`, {
+        const labelText = new PIXI.Text(`📋 Planilha: ${sheet.ownerName || 'Jogador'}`, {
           fontFamily: 'sans-serif',
           fontSize: 12,
           fontWeight: 'bold',
@@ -771,6 +809,56 @@ class BoardEngine {
         labelText.x = 10;
         labelText.y = 6;
         slotContainer.addChild(labelText);
+
+        // Make Slot Interactive for Direct Field Editing on Tabletop
+        slotContainer.eventMode = 'static';
+        slotContainer.cursor = 'pointer';
+        slotContainer.on('pointerdown', (e) => {
+          if (this.currentTool === 'select' && sheet.poiseData && sheet.poiseData.fields) {
+            const origEvent = e.data?.originalEvent || e;
+            const rect = this.container.getBoundingClientRect();
+            const clickScreenX = origEvent.clientX || 0;
+            const clickScreenY = origEvent.clientY || 0;
+
+            const clickMouseX = clickScreenX - rect.left;
+            const clickMouseY = clickScreenY - rect.top;
+            const worldPos = this.screenToWorld(clickMouseX, clickMouseY);
+
+            const relX = worldPos.x - slotPixelX;
+            const relY = worldPos.y - slotPixelY;
+
+            const pctX = (relX / slotPixelW) * 100;
+            const pctY = (relY / slotPixelH) * 100;
+
+            // Find clicked field
+            const hitField = sheet.poiseData.fields.find(f => 
+              pctX >= f.x && pctX <= (f.x + f.w) &&
+              pctY >= f.y && pctY <= (f.y + f.h)
+            );
+
+            if (hitField) {
+              const currentVal = (sheet.fieldValues && sheet.fieldValues[hitField.id] !== undefined) ? sheet.fieldValues[hitField.id] : (hitField.value || '');
+              
+              const fieldPxX = slotPixelX + (hitField.x / 100) * slotPixelW;
+              const fieldPxY = slotPixelY + (hitField.y / 100) * slotPixelH;
+              const fieldPxW = (hitField.w / 100) * slotPixelW;
+              const fieldPxH = (hitField.h / 100) * slotPixelH;
+
+              state.notify('FIELD_CLICKED', {
+                slotId: slot.id,
+                field: hitField,
+                currentVal,
+                clickScreenX,
+                clickScreenY,
+                fieldPxX,
+                fieldPxY,
+                fieldPxW,
+                fieldPxH
+              });
+              e.stopPropagation();
+            }
+          }
+        });
 
       } else {
         slotGfx.beginFill(0x0f172a, 0.75);

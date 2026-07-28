@@ -28,6 +28,11 @@
     </div>
   </div>
 
+  <!-- Tabletop Direct Field Inline Editor Overlay -->
+  <div id="tabletop-inline-editor" class="hidden" style="position: absolute; z-index: 999999; display: flex; flex-direction: column;">
+    <input type="text" id="inline-field-input" class="form-control" style="font-size: 0.85rem; padding: 4px 6px; background: rgba(15, 23, 42, 0.96); color: #f8fafc; border: 2px solid var(--accent-gold); box-shadow: 0 4px 14px rgba(0,0,0,0.7); border-radius: 4px;" />
+  </div>
+
   <!-- Ultra-Compact Navigation Bar -->
   <nav class="navbar" style="padding: 4px 16px; min-height: 38px;">
     <div class="nav-brand">
@@ -189,10 +194,10 @@
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
-          <!-- TAB: Character Sheets (Planilhas 17x22) -->
+          <!-- TAB: Character Sheets (Planilhas 17x22 & .poise) -->
           <div class="tab-pane hidden" id="tab-pane-sheets">
-            <h4 style="margin-bottom: 6px; font-size: 0.85rem;">📋 Adicionar Imagem da Planilha</h4>
-            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em retângulos de 17x22.</p>
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Gestão de Planilhas (.poise)</h4>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em áreas de 17x22. Clique sobre qualquer campo na mesa para editá-lo diretamente!</p>
             
             <div class="form-group" style="margin-bottom: 8px;">
               <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga de Planilha</label>
@@ -205,18 +210,29 @@
               </select>
             </div>
 
+            <!-- Built-in Template & File Upload Buttons -->
+            <button class="btn btn-gold" id="btn-load-default-poise" style="width: 100%; margin-bottom: 8px; font-size: 0.8rem; padding: 6px;">
+              📋 Carregar Planilha Padrão 1.5
+            </button>
+
             <div class="form-group" style="margin-bottom: 8px;">
-              <label style="font-size: 0.75rem;">Imagem da Planilha (JPG/PNG)</label>
-              <input type="file" id="sheet-file-input" accept="image/*" class="form-control" style="font-size: 0.75rem; padding: 6px;" />
+              <label style="font-size: 0.75rem;">Upload de Arquivo .poise ou Imagem</label>
+              <input type="file" id="poise-file-input" accept=".poise,.json,image/*" class="form-control" style="font-size: 0.75rem; padding: 4px;" />
             </div>
 
-            <div style="display: flex; gap: 6px; margin-top: 8px;">
+            <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 12px;">
               <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
                 🎯 Focar na Planilha
               </button>
               <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
                 🗺️ Focar no Mapa
               </button>
+            </div>
+
+            <!-- Sidebar Field Inspector & Editor -->
+            <div id="sheet-fields-container" class="hidden" style="margin-top: 10px; padding: 8px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); max-height: 240px; overflow-y: auto;">
+              <h4 style="font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px;">✏️ Campos da Planilha Ativa</h4>
+              <div id="sheet-fields-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
             </div>
           </div>
 

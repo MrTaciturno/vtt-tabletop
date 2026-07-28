@@ -3,6 +3,7 @@ import { auth } from './auth.js';
 import { lobbyManager } from './lobby.js';
 import { diceEngine } from './dice.js';
 import { boardEngine } from './board.js';
+import { defaultPoiseData } from './defaultPoise.js';
 
 /**
  * UI Renderer & DOM Controller
@@ -13,6 +14,7 @@ class UIController {
     this.toastContainer = null;
     this.showFloatingPlayers = true;
     this.tokenNameCounters = {};
+    this.activeInlineEditData = null;
   }
 
   init() {
@@ -67,6 +69,9 @@ class UIController {
       this.updateSheetSelectOptions();
     } else if (event === 'SHEETS_CHANGED') {
       this.updateSheetSelectOptions();
+      this.renderSheetFieldsInspector();
+    } else if (event === 'FIELD_CLICKED') {
+      this.showTabletopInlineEditor(data);
     } else if (event === 'TOKEN_SELECTED') {
       this.updateTokenEditUI(data);
     } else if (event === 'DICE_ROLLED') {
@@ -204,11 +209,65 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
-    // Character Sheet Controls
-    document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
+    // Character Sheet Controls (.poise & Image)
+    document.getElementById('btn-load-default-poise')?.addEventListener('click', () => {
+      const slotId = Number(document.getElementById('sheet-slot-select')?.value) || 0;
+      const currentUser = state.currentUser || { id: 'anon', username: 'Jogador' };
+
+      if (!defaultPoiseData) {
+        this.showToast('Erro ao carregar modelo de planilha.', 'error');
+        return;
+      }
+
+      const sheetData = {
+        slotId,
+        ownerId: currentUser.id,
+        ownerName: currentUser.username,
+        poiseData: defaultPoiseData,
+        fieldValues: {},
+        updatedAt: Date.now()
+      };
+
+      state.updateCharacterSheet(slotId, sheetData);
+      network.broadcast('SHEET_UPDATED', sheetData);
+      this.showToast(`Planilha Padrão 1.5 carregada na Vaga ${slotId + 1}!`, 'success');
+      this.updateSheetSelectOptions();
+      this.renderSheetFieldsInspector();
+    });
+
+    document.getElementById('poise-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      const slotId = document.getElementById('sheet-slot-select')?.value;
-      if (file && slotId !== undefined) {
+      const slotId = Number(document.getElementById('sheet-slot-select')?.value) || 0;
+      const currentUser = state.currentUser || { id: 'anon', username: 'Jogador' };
+
+      if (!file) return;
+
+      if (file.name.endsWith('.poise') || file.name.endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const poiseData = JSON.parse(evt.target.result);
+            const sheetData = {
+              slotId,
+              ownerId: currentUser.id,
+              ownerName: currentUser.username,
+              poiseData,
+              fieldValues: {},
+              updatedAt: Date.now()
+            };
+
+            state.updateCharacterSheet(slotId, sheetData);
+            network.broadcast('SHEET_UPDATED', sheetData);
+            this.showToast(`Planilha '${file.name}' carregada na Vaga ${slotId + 1}!`, 'success');
+            this.updateSheetSelectOptions();
+            this.renderSheetFieldsInspector();
+          } catch (err) {
+            this.showToast('Erro ao ler arquivo .poise: formato JSON inválido.', 'error');
+          }
+        };
+        reader.readAsText(file);
+      } else {
+        // Image File Fallback
         this.showToast('Processando imagem da planilha...', 'info');
         this.compressMapImage(file, (optimizedDataUrl) => {
           try {
@@ -220,6 +279,38 @@ class UIController {
           }
         });
       }
+    });
+
+    document.getElementById('sheet-slot-select')?.addEventListener('change', () => {
+      this.renderSheetFieldsInspector();
+    });
+
+    // Tabletop Inline Editor Handlers
+    const saveInlineEdit = () => {
+      if (this.activeInlineEditData) {
+        const { slotId, field } = this.activeInlineEditData;
+        const val = document.getElementById('inline-field-input')?.value || '';
+        state.updateSheetFieldValue(slotId, field.id, val, true);
+        
+        const sheet = state.characterSheets[slotId];
+        if (sheet) network.broadcast('SHEET_UPDATED', sheet);
+
+        this.activeInlineEditData = null;
+        document.getElementById('tabletop-inline-editor')?.classList.add('hidden');
+      }
+    };
+
+    document.getElementById('inline-field-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        saveInlineEdit();
+      } else if (e.key === 'Escape') {
+        this.activeInlineEditData = null;
+        document.getElementById('tabletop-inline-editor')?.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('inline-field-input')?.addEventListener('blur', () => {
+      saveInlineEdit();
     });
 
     document.getElementById('btn-focus-sheet')?.addEventListener('click', () => {
@@ -638,6 +729,67 @@ class UIController {
       } else {
         btn.classList.remove('selected');
       }
+    });
+  }
+
+  showTabletopInlineEditor(data) {
+    const editor = document.getElementById('tabletop-inline-editor');
+    const input = document.getElementById('inline-field-input');
+    if (!editor || !input || !data || !boardEngine.container) return;
+
+    this.activeInlineEditData = data;
+
+    const rect = boardEngine.container.getBoundingClientRect();
+    const fieldScreenPos = boardEngine.worldToScreen(data.fieldPxX, data.fieldPxY);
+    
+    const fieldWidthScreen = data.fieldPxW * boardEngine.scale;
+    const fieldHeightScreen = Math.max(26, data.fieldPxH * boardEngine.scale);
+
+    editor.style.left = `${rect.left + fieldScreenPos.x}px`;
+    editor.style.top = `${rect.top + fieldScreenPos.y}px`;
+    editor.style.width = `${Math.max(120, fieldWidthScreen)}px`;
+
+    input.value = data.currentVal || '';
+    editor.classList.remove('hidden');
+    input.focus();
+    input.select();
+  }
+
+  renderSheetFieldsInspector() {
+    const container = document.getElementById('sheet-fields-container');
+    const list = document.getElementById('sheet-fields-list');
+    const slotId = Number(document.getElementById('sheet-slot-select')?.value) || 0;
+
+    if (!container || !list) return;
+
+    const sheet = state.characterSheets[slotId];
+    if (!sheet || !sheet.poiseData || !sheet.poiseData.fields) {
+      container.classList.add('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+
+    list.innerHTML = sheet.poiseData.fields.map(f => {
+      const val = (sheet.fieldValues && sheet.fieldValues[f.id] !== undefined) ? sheet.fieldValues[f.id] : (f.value || '');
+      return `
+        <div class="form-group" style="margin-bottom: 4px;">
+          <label style="font-size: 0.7rem; color: #cbd5e1; margin-bottom: 1px;">${f.name || f.id}</label>
+          <input type="text" class="form-control sidebar-field-input" data-slot="${slotId}" data-field="${f.id}" value="${val}" style="font-size: 0.75rem; padding: 4px 6px;" />
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.sidebar-field-input').forEach(inp => {
+      inp.addEventListener('change', (e) => {
+        const sId = Number(e.target.dataset.slot);
+        const fId = e.target.dataset.field;
+        const newVal = e.target.value;
+
+        state.updateSheetFieldValue(sId, fId, newVal, true);
+        const updatedSheet = state.characterSheets[sId];
+        if (updatedSheet) network.broadcast('SHEET_UPDATED', updatedSheet);
+      });
     });
   }
 

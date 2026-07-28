@@ -10,7 +10,7 @@ class AppState {
     this.currentTurnIndex = 0;
     this.diceHistory = [];   // Array of { id, player, diceType, result, timestamp, isNat20, isNat1 }
     this.selectedDice = 'd20';
-    this.characterSheets = {}; // { [slotIndex]: { id, ownerId, ownerName, imageUrl } }
+    this.characterSheets = {}; // { [slotIndex]: { slotId, ownerId, ownerName, imageUrl, poiseData, fieldValues } }
     this.listeners = new Set();
   }
 
@@ -58,8 +58,22 @@ class AppState {
   }
 
   updateCharacterSheet(slotIndex, sheetData) {
-    this.characterSheets[slotIndex] = sheetData;
+    const existing = this.characterSheets[slotIndex] || {};
+    this.characterSheets[slotIndex] = {
+      ...existing,
+      ...sheetData
+    };
     this.notify('SHEETS_CHANGED', this.characterSheets);
+  }
+
+  updateSheetFieldValue(slotIndex, fieldId, value, broadcast = true) {
+    const sheet = this.characterSheets[slotIndex];
+    if (sheet) {
+      if (!sheet.fieldValues) sheet.fieldValues = {};
+      sheet.fieldValues[fieldId] = value;
+      sheet.updatedAt = Date.now();
+      this.notify('SHEETS_CHANGED', this.characterSheets);
+    }
   }
 
   addDiceRoll(rollData) {
