@@ -69,9 +69,8 @@ class UIController {
       this.updateSheetSelectOptions();
     } else if (event === 'SHEETS_CHANGED') {
       this.updateSheetSelectOptions();
-      this.renderSheetFieldsInspector();
-    } else if (event === 'FIELD_CLICKED') {
-      this.showTabletopInlineEditor(data);
+    } else if (event === 'OPEN_SHEET_MODAL') {
+      this.openSheetModal(data.slotId);
     } else if (event === 'TOKEN_SELECTED') {
       this.updateTokenEditUI(data);
     } else if (event === 'DICE_ROLLED') {
@@ -281,36 +280,52 @@ class UIController {
       }
     });
 
-    document.getElementById('sheet-slot-select')?.addEventListener('change', () => {
-      this.renderSheetFieldsInspector();
+    // Open Modal Edit Button in Sidebar
+    document.getElementById('btn-open-edit-modal')?.addEventListener('click', () => {
+      const slotId = Number(document.getElementById('sheet-slot-select')?.value) || 0;
+      this.openSheetModal(slotId);
     });
 
-    // Tabletop Inline Editor Handlers
-    const saveInlineEdit = () => {
-      if (this.activeInlineEditData) {
-        const { slotId, field } = this.activeInlineEditData;
-        const val = document.getElementById('inline-field-input')?.value || '';
-        state.updateSheetFieldValue(slotId, field.id, val, true);
-        
-        const sheet = state.characterSheets[slotId];
-        if (sheet) network.broadcast('SHEET_UPDATED', sheet);
-
-        this.activeInlineEditData = null;
-        document.getElementById('tabletop-inline-editor')?.classList.add('hidden');
-      }
-    };
-
-    document.getElementById('inline-field-input')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        saveInlineEdit();
-      } else if (e.key === 'Escape') {
-        this.activeInlineEditData = null;
-        document.getElementById('tabletop-inline-editor')?.classList.add('hidden');
-      }
+    // Close / Cancel Sheet Modal
+    document.getElementById('btn-close-sheet-modal')?.addEventListener('click', () => {
+      this.closeSheetModal();
     });
 
-    document.getElementById('inline-field-input')?.addEventListener('blur', () => {
-      saveInlineEdit();
+    document.getElementById('btn-cancel-sheet-modal')?.addEventListener('click', () => {
+      this.closeSheetModal();
+    });
+
+    // Save Sheet Modal Form
+    document.getElementById('btn-save-sheet-modal')?.addEventListener('click', () => {
+      this.saveSheetModal();
+    });
+
+    // Master Equipment Spawner
+    document.getElementById('btn-spawn-equip')?.addEventListener('click', () => {
+      const select = document.getElementById('equip-select');
+      const nameInput = document.getElementById('equip-name-input');
+      if (!select) return;
+
+      const selectedOpt = select.options[select.selectedIndex];
+      const imageName = select.value;
+      const cols = Number(selectedOpt.dataset.cols) || 2;
+      const rows = Number(selectedOpt.dataset.rows) || 2;
+      const customName = nameInput?.value.trim();
+      const itemName = customName || imageName.replace('.png', '');
+
+      // Create equipment token on grid
+      const equipToken = {
+        id: 'equip_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        name: itemName,
+        x: 5,
+        y: 5,
+        size: Math.max(1, Math.min(4, Math.max(cols, rows))),
+        imageUrl: `./src/Equip/${imageName}`
+      };
+
+      boardEngine.addToken(equipToken, true);
+      this.showToast(`Equipamento '${itemName}' (${cols}x${rows}) inserido no grid!`, 'success');
+      if (nameInput) nameInput.value = '';
     });
 
     document.getElementById('btn-focus-sheet')?.addEventListener('click', () => {
@@ -732,65 +747,71 @@ class UIController {
     });
   }
 
-  showTabletopInlineEditor(data) {
-    const editor = document.getElementById('tabletop-inline-editor');
-    const input = document.getElementById('inline-field-input');
-    if (!editor || !input || !data || !boardEngine.container) return;
+  openSheetModal(slotId = 0) {
+    const modal = document.getElementById('modal-edit-sheet');
+    const form = document.getElementById('form-modal-sheet-fields');
+    const title = document.getElementById('modal-sheet-title');
+    if (!modal || !form) return;
 
-    this.activeInlineEditData = data;
-
-    const rect = boardEngine.container.getBoundingClientRect();
-    const fieldScreenPos = boardEngine.worldToScreen(data.fieldPxX, data.fieldPxY);
-    
-    const fieldWidthScreen = data.fieldPxW * boardEngine.scale;
-    const fieldHeightScreen = Math.max(26, data.fieldPxH * boardEngine.scale);
-
-    editor.style.left = `${rect.left + fieldScreenPos.x}px`;
-    editor.style.top = `${rect.top + fieldScreenPos.y}px`;
-    editor.style.width = `${Math.max(120, fieldWidthScreen)}px`;
-
-    input.value = data.currentVal || '';
-    editor.classList.remove('hidden');
-    input.focus();
-    input.select();
-  }
-
-  renderSheetFieldsInspector() {
-    const container = document.getElementById('sheet-fields-container');
-    const list = document.getElementById('sheet-fields-list');
-    const slotId = Number(document.getElementById('sheet-slot-select')?.value) || 0;
-
-    if (!container || !list) return;
+    this.activeModalSlotId = slotId;
 
     const sheet = state.characterSheets[slotId];
     if (!sheet || !sheet.poiseData || !sheet.poiseData.fields) {
-      container.classList.add('hidden');
+      this.showToast(`Nenhuma planilha .poise carregada na Vaga ${slotId + 1}.`, 'info');
       return;
     }
 
-    container.classList.remove('hidden');
+    if (title) {
+      title.textContent = `✏️ Editar Planilha (Vaga ${slotId + 1} - ${sheet.ownerName || 'Jogador'})`;
+    }
 
-    list.innerHTML = sheet.poiseData.fields.map(f => {
+    form.innerHTML = sheet.poiseData.fields.map(f => {
       const val = (sheet.fieldValues && sheet.fieldValues[f.id] !== undefined) ? sheet.fieldValues[f.id] : (f.value || '');
+      const isTextarea = f.type === 'textarea' || (f.h && f.h > 6);
+
       return `
-        <div class="form-group" style="margin-bottom: 4px;">
-          <label style="font-size: 0.7rem; color: #cbd5e1; margin-bottom: 1px;">${f.name || f.id}</label>
-          <input type="text" class="form-control sidebar-field-input" data-slot="${slotId}" data-field="${f.id}" value="${val}" style="font-size: 0.75rem; padding: 4px 6px;" />
+        <div class="form-group" style="margin-bottom: 8px; ${isTextarea ? 'grid-column: span 2;' : ''}">
+          <label style="font-size: 0.75rem; color: #e2e8f0; margin-bottom: 2px; font-weight: bold;">${f.name || f.id}</label>
+          ${isTextarea ? 
+            `<textarea class="form-control modal-field-input" data-field="${f.id}" rows="2" style="font-size: 0.8rem; padding: 6px;">${val}</textarea>` :
+            `<input type="text" class="form-control modal-field-input" data-field="${f.id}" value="${val}" style="font-size: 0.8rem; padding: 6px;" />`
+          }
         </div>
       `;
     }).join('');
 
-    list.querySelectorAll('.sidebar-field-input').forEach(inp => {
-      inp.addEventListener('change', (e) => {
-        const sId = Number(e.target.dataset.slot);
-        const fId = e.target.dataset.field;
-        const newVal = e.target.value;
+    modal.classList.remove('hidden');
+  }
 
-        state.updateSheetFieldValue(sId, fId, newVal, true);
-        const updatedSheet = state.characterSheets[sId];
-        if (updatedSheet) network.broadcast('SHEET_UPDATED', updatedSheet);
-      });
+  closeSheetModal() {
+    const modal = document.getElementById('modal-edit-sheet');
+    if (modal) modal.classList.add('hidden');
+    this.activeModalSlotId = null;
+  }
+
+  saveSheetModal() {
+    const slotId = this.activeModalSlotId;
+    if (slotId === null || slotId === undefined) return;
+
+    const sheet = state.characterSheets[slotId];
+    if (!sheet) return;
+
+    const inputs = document.querySelectorAll('.modal-field-input');
+    if (!sheet.fieldValues) sheet.fieldValues = {};
+
+    inputs.forEach(inp => {
+      const fId = inp.dataset.field;
+      if (fId) {
+        sheet.fieldValues[fId] = inp.value;
+      }
     });
+
+    sheet.updatedAt = Date.now();
+    state.updateCharacterSheet(slotId, sheet);
+    network.broadcast('SHEET_UPDATED', sheet);
+
+    this.showToast(`Planilha da Vaga ${slotId + 1} salva com sucesso!`, 'success');
+    this.closeSheetModal();
   }
 
   renderRollLog() {

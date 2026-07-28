@@ -810,55 +810,30 @@ class BoardEngine {
         labelText.y = 6;
         slotContainer.addChild(labelText);
 
-        // Make Slot Interactive for Direct Field Editing on Tabletop
-        slotContainer.eventMode = 'static';
-        slotContainer.cursor = 'pointer';
-        slotContainer.on('pointerdown', (e) => {
-          if (this.currentTool === 'select' && sheet.poiseData && sheet.poiseData.fields) {
-            const origEvent = e.data?.originalEvent || e;
-            const rect = this.container.getBoundingClientRect();
-            const clickScreenX = origEvent.clientX || 0;
-            const clickScreenY = origEvent.clientY || 0;
+        // Edit Sheet Button in Slot Header
+        const editBtnGfx = new PIXI.Graphics();
+        editBtnGfx.beginFill(0x0f172a, 0.9);
+        editBtnGfx.drawRoundedRect(slotPixelW - 125, 3, 118, 20, 4);
+        editBtnGfx.endFill();
+        editBtnGfx.eventMode = 'static';
+        editBtnGfx.cursor = 'pointer';
 
-            const clickMouseX = clickScreenX - rect.left;
-            const clickMouseY = clickScreenY - rect.top;
-            const worldPos = this.screenToWorld(clickMouseX, clickMouseY);
-
-            const relX = worldPos.x - slotPixelX;
-            const relY = worldPos.y - slotPixelY;
-
-            const pctX = (relX / slotPixelW) * 100;
-            const pctY = (relY / slotPixelH) * 100;
-
-            // Find clicked field
-            const hitField = sheet.poiseData.fields.find(f => 
-              pctX >= f.x && pctX <= (f.x + f.w) &&
-              pctY >= f.y && pctY <= (f.y + f.h)
-            );
-
-            if (hitField) {
-              const currentVal = (sheet.fieldValues && sheet.fieldValues[hitField.id] !== undefined) ? sheet.fieldValues[hitField.id] : (hitField.value || '');
-              
-              const fieldPxX = slotPixelX + (hitField.x / 100) * slotPixelW;
-              const fieldPxY = slotPixelY + (hitField.y / 100) * slotPixelH;
-              const fieldPxW = (hitField.w / 100) * slotPixelW;
-              const fieldPxH = (hitField.h / 100) * slotPixelH;
-
-              state.notify('FIELD_CLICKED', {
-                slotId: slot.id,
-                field: hitField,
-                currentVal,
-                clickScreenX,
-                clickScreenY,
-                fieldPxX,
-                fieldPxY,
-                fieldPxW,
-                fieldPxH
-              });
-              e.stopPropagation();
-            }
-          }
+        const editBtnText = new PIXI.Text(`✏️ Editar Planilha`, {
+          fontFamily: 'sans-serif',
+          fontSize: 10,
+          fontWeight: 'bold',
+          fill: 0xeab308
         });
+        editBtnText.x = slotPixelW - 120;
+        editBtnText.y = 6;
+
+        editBtnGfx.on('pointerdown', (e) => {
+          state.notify('OPEN_SHEET_MODAL', { slotId: slot.id });
+          e.stopPropagation();
+        });
+
+        slotContainer.addChild(editBtnGfx);
+        slotContainer.addChild(editBtnText);
 
       } else {
         slotGfx.beginFill(0x0f172a, 0.75);

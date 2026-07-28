@@ -28,9 +28,25 @@
     </div>
   </div>
 
-  <!-- Tabletop Direct Field Inline Editor Overlay -->
-  <div id="tabletop-inline-editor" class="hidden" style="position: absolute; z-index: 999999; display: flex; flex-direction: column;">
-    <input type="text" id="inline-field-input" class="form-control" style="font-size: 0.85rem; padding: 4px 6px; background: rgba(15, 23, 42, 0.96); color: #f8fafc; border: 2px solid var(--accent-gold); box-shadow: 0 4px 14px rgba(0,0,0,0.7); border-radius: 4px;" />
+  <!-- Sheet Field Editor Modal Window -->
+  <div id="modal-edit-sheet" class="modal-overlay hidden" style="position: fixed; inset: 0; z-index: 999999; background: rgba(0,0,0,0.82); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 20px;">
+    <div class="glass-panel" style="width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; padding: 18px; border: 2px solid var(--accent-gold); border-radius: var(--radius-md); background: rgba(15, 23, 42, 0.98); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 8px;">
+        <h3 id="modal-sheet-title" style="margin: 0; font-size: 1.1rem; color: var(--accent-gold);">✏️ Editar Planilha de Personagem</h3>
+        <button type="button" id="btn-close-sheet-modal" class="btn-icon" style="font-size: 1.2rem; color: #94a3b8; cursor: pointer; background: transparent; border: none;">✕</button>
+      </div>
+      
+      <div style="flex: 1; overflow-y: auto; padding-right: 6px; margin-bottom: 10px;">
+        <form id="form-modal-sheet-fields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- Rendered dynamically by JS -->
+        </form>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; pt: 10px; border-top: 1px solid rgba(255,255,255,0.12);">
+        <button type="button" id="btn-cancel-sheet-modal" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 16px;">Cancelar</button>
+        <button type="button" id="btn-save-sheet-modal" class="btn btn-gold" style="font-size: 0.85rem; padding: 6px 20px;">💾 Salvar Alterações</button>
+      </div>
+    </div>
   </div>
 
   <!-- Ultra-Compact Navigation Bar -->
@@ -197,7 +213,7 @@
           <!-- TAB: Character Sheets (Planilhas 17x22 & .poise) -->
           <div class="tab-pane hidden" id="tab-pane-sheets">
             <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Gestão de Planilhas (.poise)</h4>
-            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em áreas de 17x22. Clique sobre qualquer campo na mesa para editá-lo diretamente!</p>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em áreas de 17x22.</p>
             
             <div class="form-group" style="margin-bottom: 8px;">
               <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga de Planilha</label>
@@ -220,19 +236,54 @@
               <input type="file" id="poise-file-input" accept=".poise,.json,image/*" class="form-control" style="font-size: 0.75rem; padding: 4px;" />
             </div>
 
-            <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 12px;">
-              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
-                🎯 Focar na Planilha
+            <!-- Open Modal Edit Button -->
+            <button class="btn btn-primary" id="btn-open-edit-modal" style="width: 100%; margin-bottom: 8px; font-size: 0.8rem; padding: 6px;">
+              ✏️ Editar Campos da Planilha
+            </button>
+
+            <div style="display: flex; gap: 6px; margin-top: 4px; margin-bottom: 12px;">
+              <button class="btn btn-secondary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                🎯 Focar Planilha
               </button>
               <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
-                🗺️ Focar no Mapa
+                🗺️ Focar Mapa
               </button>
             </div>
 
-            <!-- Sidebar Field Inspector & Editor -->
-            <div id="sheet-fields-container" class="hidden" style="margin-top: 10px; padding: 8px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm); max-height: 240px; overflow-y: auto;">
-              <h4 style="font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px;">✏️ Campos da Planilha Ativa</h4>
-              <div id="sheet-fields-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            <!-- Equipment Spawner Section (Master Only) -->
+            <div id="master-equip-controls" style="margin-top: 10px; padding: 10px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--radius-sm);">
+              <h4 style="font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px;">⚔️ Equipamentos (Tamanho Fixo)</h4>
+              <p class="text-muted" style="font-size: 0.7rem; margin-bottom: 8px;">Insira um item da pasta Equip no grid em seu tamanho original proporcional (sem distorção/redimensionamento).</p>
+
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label for="equip-select" style="font-size: 0.75rem;">Selecione o Equipamento</label>
+                <select id="equip-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                  <option value="IC1x1.png" data-cols="1" data-rows="1">IC1x1 (1x1)</option>
+                  <option value="IC1x2.png" data-cols="1" data-rows="2">IC1x2 (1x2)</option>
+                  <option value="IC1x3.png" data-cols="1" data-rows="3">IC1x3 (1x3)</option>
+                  <option value="IC1x4.png" data-cols="1" data-rows="4">IC1x4 (1x4)</option>
+                  <option value="IC2x1.png" data-cols="2" data-rows="1">IC2x1 (2x1)</option>
+                  <option value="IC2x2.png" data-cols="2" data-rows="2" selected>IC2x2 (2x2)</option>
+                  <option value="IC2x3.png" data-cols="2" data-rows="3">IC2x3 (2x3)</option>
+                  <option value="IC2x4.png" data-cols="2" data-rows="4">IC2x4 (2x4)</option>
+                  <option value="IC3x1.png" data-cols="3" data-rows="1">IC3x1 (3x1)</option>
+                  <option value="IC3x2.png" data-cols="3" data-rows="2">IC3x2 (3x2)</option>
+                  <option value="IC3x3.png" data-cols="3" data-rows="3">IC3x3 (3x3)</option>
+                  <option value="IC3x4.png" data-cols="3" data-rows="4">IC3x4 (3x4)</option>
+                  <option value="IC4x1.png" data-cols="4" data-rows="1">IC4x1 (4x1)</option>
+                  <option value="IC4x2.png" data-cols="4" data-rows="2">IC4x2 (4x2)</option>
+                  <option value="IC4x3.png" data-cols="4" data-rows="3">IC4x3 (4x3)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label for="equip-name-input" style="font-size: 0.75rem;">Nome do Item (Opcional)</label>
+                <input type="text" id="equip-name-input" class="form-control" placeholder="Ex: Espada Longa" style="font-size: 0.75rem; padding: 4px 6px;" />
+              </div>
+
+              <button class="btn btn-gold" id="btn-spawn-equip" style="width: 100%; font-size: 0.75rem; padding: 6px;">
+                ➕ Inserir Equipamento no Grid
+              </button>
             </div>
           </div>
 
