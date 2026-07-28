@@ -52,6 +52,8 @@ class BoardEngine {
     this.dragStartGridY = 0;
     this.dragCurrentPixelX = 0;
     this.dragCurrentPixelY = 0;
+    this.dragGrabOffsetX = 0;
+    this.dragGrabOffsetY = 0;
     this.dragWaypoints = []; // Array of grid waypoint objects [{ x, y }]
 
     // Master Drawing Tools State
@@ -491,8 +493,8 @@ class BoardEngine {
         this.render();
 
       } else if (this.draggedToken && container) {
-        this.dragCurrentPixelX = worldPos.x;
-        this.dragCurrentPixelY = worldPos.y;
+        this.dragCurrentPixelX = worldPos.x - this.dragGrabOffsetX;
+        this.dragCurrentPixelY = worldPos.y - this.dragGrabOffsetY;
         this.render();
 
       } else if (this.isPanning) {
@@ -556,8 +558,9 @@ class BoardEngine {
       }
 
       if (this.draggedToken) {
-        const gridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
-        const gridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
+        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+        const gridX = Math.max(0, Math.min(this.totalCols - tSize, Math.round(this.dragCurrentPixelX / this.cellSize)));
+        const gridY = Math.max(0, Math.min(this.totalRows - tSize, Math.round(this.dragCurrentPixelY / this.cellSize)));
 
         this.moveToken(this.draggedToken.id, gridX, gridY, true);
         this.draggedToken = null;
@@ -573,9 +576,9 @@ class BoardEngine {
       if ((e.code === 'Space' || e.key === ' ') && this.draggedToken) {
         e.preventDefault();
 
-        const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
-        const targetX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
-        const targetY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
+        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+        const targetX = Math.max(0, Math.min(this.totalCols - tSize, Math.round(this.dragCurrentPixelX / this.cellSize)));
+        const targetY = Math.max(0, Math.min(this.totalRows - tSize, Math.round(this.dragCurrentPixelY / this.cellSize)));
 
         const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
         if (!lastWp || lastWp.x !== targetX || lastWp.y !== targetY) {
@@ -941,8 +944,13 @@ class BoardEngine {
           this.lastMouseY = (origEvent.clientY || 0) - rect.top;
 
           const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
-          this.dragCurrentPixelX = worldPos.x;
-          this.dragCurrentPixelY = worldPos.y;
+          
+          // Grab offset relative to token top-left corner
+          this.dragGrabOffsetX = worldPos.x - (t.x * this.cellSize);
+          this.dragGrabOffsetY = worldPos.y - (t.y * this.cellSize);
+
+          this.dragCurrentPixelX = t.x * this.cellSize;
+          this.dragCurrentPixelY = t.y * this.cellSize;
 
           e.stopPropagation();
           this.render();
@@ -959,6 +967,9 @@ class BoardEngine {
       const vectorGfx = new PIXI.Graphics();
       vectorGfx.lineStyle(3.5, 0x38bdf8, 0.95);
 
+      const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
+      const tokOffset = (tSize / 2) * this.cellSize;
+
       let accumulatedDist = 0;
 
       // 1. Draw completed waypoint segments
@@ -966,10 +977,10 @@ class BoardEngine {
         const wp1 = this.dragWaypoints[i];
         const wp2 = this.dragWaypoints[i + 1];
 
-        const p1X = (wp1.x + 0.5) * this.cellSize;
-        const p1Y = (wp1.y + 0.5) * this.cellSize;
-        const p2X = (wp2.x + 0.5) * this.cellSize;
-        const p2Y = (wp2.y + 0.5) * this.cellSize;
+        const p1X = wp1.x * this.cellSize + tokOffset;
+        const p1Y = wp1.y * this.cellSize + tokOffset;
+        const p2X = wp2.x * this.cellSize + tokOffset;
+        const p2Y = wp2.y * this.cellSize + tokOffset;
 
         vectorGfx.moveTo(p1X, p1Y);
         vectorGfx.lineTo(p2X, p2Y);
@@ -977,19 +988,19 @@ class BoardEngine {
         accumulatedDist += Math.hypot(wp2.x - wp1.x, wp2.y - wp1.y);
       }
 
-      // 2. Draw current active segment from last waypoint to current free cursor position
+      // 2. Draw current active segment from last waypoint to current token center
       const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
-      const lastPxX = (lastWp.x + 0.5) * this.cellSize;
-      const lastPxY = (lastWp.y + 0.5) * this.cellSize;
-      const currPxX = this.dragCurrentPixelX;
-      const currPxY = this.dragCurrentPixelY;
+      const lastPxX = lastWp.x * this.cellSize + tokOffset;
+      const lastPxY = lastWp.y * this.cellSize + tokOffset;
+      const currPxX = this.dragCurrentPixelX + tokOffset;
+      const currPxY = this.dragCurrentPixelY + tokOffset;
 
       vectorGfx.moveTo(lastPxX, lastPxY);
       vectorGfx.lineTo(currPxX, currPxY);
 
       // Active segment distance in grid units
-      const activeGridX = currPxX / this.cellSize - 0.5;
-      const activeGridY = currPxY / this.cellSize - 0.5;
+      const activeGridX = this.dragCurrentPixelX / this.cellSize;
+      const activeGridY = this.dragCurrentPixelY / this.cellSize;
       accumulatedDist += Math.hypot(activeGridX - lastWp.x, activeGridY - lastWp.y);
 
       // Vector Arrowhead at current cursor position
@@ -1006,8 +1017,8 @@ class BoardEngine {
       // Waypoint Node Markers (Snap circles with step numbers)
       for (let i = 0; i < this.dragWaypoints.length; i++) {
         const wp = this.dragWaypoints[i];
-        const wpPxX = (wp.x + 0.5) * this.cellSize;
-        const wpPxY = (wp.y + 0.5) * this.cellSize;
+        const wpPxX = wp.x * this.cellSize + tokOffset;
+        const wpPxY = wp.y * this.cellSize + tokOffset;
 
         vectorGfx.lineStyle(2, 0x38bdf8, 1);
         vectorGfx.beginFill(i === 0 ? 0x0f172a : 0x0284c7, 0.95);

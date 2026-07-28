@@ -163,6 +163,15 @@ class UIController {
 
         e.currentTarget.classList.add('active');
         document.getElementById(`tab-pane-${targetTab}`)?.classList.remove('hidden');
+
+        // If switching away from drawing tab, reset drawing tool to 'select' (Pan/Select)
+        if (targetTab !== 'draw') {
+          boardEngine.setDrawingTool('select');
+          document.querySelectorAll('.draw-tool-btn').forEach(b => {
+            if (b.dataset.tool === 'select') b.classList.add('active');
+            else b.classList.remove('active');
+          });
+        }
       });
     });
 
