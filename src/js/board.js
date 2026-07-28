@@ -330,7 +330,7 @@ class BoardEngine {
     this.render();
   }
 
-  addToken(name, avatar, color = '#8b5cf6', ownerId = null, size = 1, imageUrl = null, broadcast = true) {
+  addToken(name, avatar, color = '#8b5cf6', ownerId = null, size = 1, imageUrl = null, broadcast = true, extraProps = {}) {
     const tokenId = 'tok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     
     const x = this.mapOriginX + Math.floor(this.mapCols / 2);
@@ -342,6 +342,9 @@ class BoardEngine {
       avatar,
       color,
       size: Math.max(1, Math.min(4, Number(size) || 1)),
+      cols: Number(extraProps.cols) || Number(size) || 1,
+      rows: Number(extraProps.rows) || Number(size) || 1,
+      isEquipment: Boolean(extraProps.isEquipment),
       imageUrl: imageUrl || null,
       ownerId: ownerId || state.currentUser?.id,
       x,
@@ -926,12 +929,15 @@ class BoardEngine {
 
     this.tokens.forEach(t => {
       const tokGroup = new PIXI.Container();
-      const tSize = Math.max(1, Math.min(4, Number(t.size) || 1));
+      const tCols = Math.max(1, Math.min(4, Number(t.cols) || Number(t.size) || 1));
+      const tRows = Math.max(1, Math.min(4, Number(t.rows) || Number(t.size) || 1));
       
       const isBeingDragged = this.draggedToken && this.draggedToken.id === t.id;
-      const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + tSize / 2) * this.cellSize;
-      const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + tSize / 2) * this.cellSize;
-      const radius = ((tSize * this.cellSize) / 2) * 0.88;
+      const topLeftCenterX = isBeingDragged ? this.dragTopLeftPixelX : (t.x + 0.5) * this.cellSize;
+      const topLeftCenterY = isBeingDragged ? this.dragTopLeftPixelY : (t.y + 0.5) * this.cellSize;
+
+      const centerX = topLeftCenterX + ((tCols - 1) * this.cellSize) / 2;
+      const centerY = topLeftCenterY + ((tRows - 1) * this.cellSize) / 2;
 
       tokGroup.x = centerX;
       tokGroup.y = centerY;
@@ -940,65 +946,111 @@ class BoardEngine {
 
       const hexColor = parseInt((t.color || '#8b5cf6').replace('#', '0x'), 16);
 
-      if (t.imageUrl) {
-        // Image Token Sprite
-        const tex = PIXI.Texture.from(t.imageUrl);
-        const sprite = new PIXI.Sprite(tex);
-        sprite.anchor.set(0.5);
-        sprite.width = radius * 1.8;
-        sprite.height = radius * 1.8;
+      if (t.isEquipment || tCols !== tRows) {
+        // Equipment Card Rectangular Sprite
+        const rectWidth = tCols * this.cellSize * 0.94;
+        const rectHeight = tRows * this.cellSize * 0.94;
 
-        // Circular Background & Border for Image Token
-        const circleGfx = new PIXI.Graphics();
-        circleGfx.beginFill(0x0f172a, isBeingDragged ? 0.85 : 1.0);
-        circleGfx.drawCircle(0, 0, radius);
-        circleGfx.endFill();
+        if (t.imageUrl) {
+          const tex = PIXI.Texture.from(t.imageUrl);
+          const sprite = new PIXI.Sprite(tex);
+          sprite.anchor.set(0.5);
+          sprite.width = rectWidth;
+          sprite.height = rectHeight;
 
-        circleGfx.lineStyle(3, hexColor, 1);
-        circleGfx.drawCircle(0, 0, radius);
-        tokGroup.addChild(circleGfx);
-        tokGroup.addChild(sprite);
+          const borderGfx = new PIXI.Graphics();
+          borderGfx.lineStyle(2.5, hexColor, 1);
+          borderGfx.drawRoundedRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight, 6);
+
+          tokGroup.addChild(sprite);
+          tokGroup.addChild(borderGfx);
+        } else {
+          const cardGfx = new PIXI.Graphics();
+          cardGfx.beginFill(0x1e293b, 0.95);
+          cardGfx.lineStyle(2.5, hexColor, 1);
+          cardGfx.drawRoundedRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight, 6);
+          cardGfx.endFill();
+
+          const cardText = new PIXI.Text(t.name || 'Item', {
+            fontFamily: 'sans-serif',
+            fontSize: 11,
+            fontWeight: 'bold',
+            fill: 0xffffff
+          });
+          cardText.anchor.set(0.5);
+
+          tokGroup.addChild(cardGfx);
+          tokGroup.addChild(cardText);
+        }
+
+        // Selected Highlight Outline
+        if (this.selectedTokenId === t.id) {
+          const selGfx = new PIXI.Graphics();
+          selGfx.lineStyle(3.5, 0xf59e0b, 1);
+          selGfx.drawRoundedRect(-rectWidth / 2 - 3, -rectHeight / 2 - 3, rectWidth + 6, rectHeight + 6, 8);
+          tokGroup.addChild(selGfx);
+        }
 
       } else {
-        // Emoji Token Base Graphic
-        const circleGfx = new PIXI.Graphics();
-        circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
-        circleGfx.drawCircle(0, 0, radius);
-        circleGfx.endFill();
+        // Standard Circular Token Rendering
+        const radius = ((tCols * this.cellSize) / 2) * 0.88;
 
-        circleGfx.lineStyle(2.5, 0xffffff, 1);
-        circleGfx.drawCircle(0, 0, radius);
-        tokGroup.addChild(circleGfx);
+        if (t.imageUrl) {
+          const tex = PIXI.Texture.from(t.imageUrl);
+          const sprite = new PIXI.Sprite(tex);
+          sprite.anchor.set(0.5);
+          sprite.width = radius * 1.8;
+          sprite.height = radius * 1.8;
 
-        // Avatar Emoji Text
-        const avatarText = new PIXI.Text(t.avatar || '🎲', {
-          fontSize: radius * 1.0
+          const circleGfx = new PIXI.Graphics();
+          circleGfx.beginFill(0x0f172a, isBeingDragged ? 0.85 : 1.0);
+          circleGfx.drawCircle(0, 0, radius);
+          circleGfx.endFill();
+
+          circleGfx.lineStyle(3, hexColor, 1);
+          circleGfx.drawCircle(0, 0, radius);
+          tokGroup.addChild(circleGfx);
+          tokGroup.addChild(sprite);
+
+        } else {
+          const circleGfx = new PIXI.Graphics();
+          circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
+          circleGfx.drawCircle(0, 0, radius);
+          circleGfx.endFill();
+
+          circleGfx.lineStyle(2.5, 0xffffff, 1);
+          circleGfx.drawCircle(0, 0, radius);
+          tokGroup.addChild(circleGfx);
+
+          const avatarText = new PIXI.Text(t.avatar || '🎲', {
+            fontSize: radius * 1.0
+          });
+          avatarText.anchor.set(0.5);
+          avatarText.y = 1;
+          tokGroup.addChild(avatarText);
+        }
+
+        // Selected Highlight Ring
+        if (this.selectedTokenId === t.id) {
+          const selGfx = new PIXI.Graphics();
+          selGfx.lineStyle(3.5, 0xf59e0b, 1);
+          selGfx.drawCircle(0, 0, radius + 5);
+          tokGroup.addChild(selGfx);
+        }
+
+        // Name Label Tag
+        const nameText = new PIXI.Text(t.name, {
+          fontFamily: 'sans-serif',
+          fontSize: Math.max(10, 9 + tCols),
+          fontWeight: 'bold',
+          fill: 0xffffff,
+          stroke: 0x000000,
+          strokeThickness: 3
         });
-        avatarText.anchor.set(0.5);
-        avatarText.y = 1;
-        tokGroup.addChild(avatarText);
+        nameText.anchor.set(0.5, 0);
+        nameText.y = radius + 4;
+        tokGroup.addChild(nameText);
       }
-
-      // Selected Highlight Ring
-      if (this.selectedTokenId === t.id) {
-        const selGfx = new PIXI.Graphics();
-        selGfx.lineStyle(3.5, 0xf59e0b, 1);
-        selGfx.drawCircle(0, 0, radius + 5);
-        tokGroup.addChild(selGfx);
-      }
-
-      // Name Label Tag
-      const nameText = new PIXI.Text(t.name, {
-        fontFamily: 'sans-serif',
-        fontSize: Math.max(10, 9 + tSize),
-        fontWeight: 'bold',
-        fill: 0xffffff,
-        stroke: 0x000000,
-        strokeThickness: 3
-      });
-      nameText.anchor.set(0.5, 0);
-      nameText.y = radius + 4;
-      tokGroup.addChild(nameText);
 
       // Interactive Pointer Events
       tokGroup.on('pointerdown', (e) => {

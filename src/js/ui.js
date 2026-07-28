@@ -3,6 +3,7 @@ import { auth } from './auth.js';
 import { lobbyManager } from './lobby.js';
 import { diceEngine } from './dice.js';
 import { boardEngine } from './board.js';
+import { poiseLoader } from './poiseLoader.js';
 
 /**
  * UI Renderer & DOM Controller
@@ -13,6 +14,7 @@ class UIController {
     this.toastContainer = null;
     this.showFloatingPlayers = true;
     this.tokenNameCounters = {};
+    this.activePoiseSheet = null;
   }
 
   init() {
@@ -195,19 +197,34 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
-    // Character Sheet Controls
-    document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
+    // Character Sheet Controls (.poise loader, editor, export & import)
+    document.getElementById('sheet-slot-select')?.addEventListener('change', (e) => {
+      const slotId = e.target.value;
+      const sheetData = state.characterSheets[slotId] || poiseLoader.getDefaultPoiseData();
+      this.renderPoiseSheet(sheetData);
+    });
+
+    document.getElementById('btn-download-poise')?.addEventListener('click', () => {
+      if (this.activePoiseSheet) {
+        const charNameField = (this.activePoiseSheet.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
+        const name = charNameField?.value?.trim()?.split('\n')[0] || 'Planilha';
+        poiseLoader.exportPoiseFile(this.activePoiseSheet, `${name}.poise`);
+        this.showToast(`Planilha '${name}.poise' baixada com sucesso!`, 'success');
+      }
+    });
+
+    document.getElementById('poise-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      const slotId = document.getElementById('sheet-slot-select')?.value;
-      if (file && slotId !== undefined) {
-        this.showToast('Processando imagem da planilha...', 'info');
-        this.compressMapImage(file, (optimizedDataUrl) => {
-          try {
-            boardEngine.setSheetImage(slotId, optimizedDataUrl, true);
-            this.showToast('Planilha atualizada e exibida na mesa!', 'success');
-            this.updateSheetSelectOptions();
-          } catch (err) {
+      if (file) {
+        poiseLoader.parsePoiseFile(file, (err, parsedData) => {
+          if (err) {
             this.showToast(err.message, 'error');
+          } else {
+            this.activePoiseSheet = parsedData;
+            this.renderPoiseSheet(parsedData);
+            const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+            state.updateCharacterSheet(slotId, parsedData);
+            this.showToast('Planilha .poise carregada!', 'success');
           }
         });
       }
@@ -220,6 +237,30 @@ class UIController {
 
     document.getElementById('btn-focus-map')?.addEventListener('click', () => {
       boardEngine.centerView();
+    });
+
+    // Master Equipment Cards Spawner (src/Equip/)
+    document.getElementById('form-spawn-equip')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const selectEl = document.getElementById('equip-card-select');
+      if (!selectEl) return;
+
+      const selectedOpt = selectEl.options[selectEl.selectedIndex];
+      const imageName = selectEl.value; // e.g. IC2x2
+      const cols = Number(selectedOpt.dataset.cols) || 2;
+      const rows = Number(selectedOpt.dataset.rows) || 2;
+      const rawName = document.getElementById('equip-name-input')?.value || selectedOpt.text.split(' (')[0];
+
+      const imageUrl = `./src/Equip/${imageName}.png`;
+      const finalName = this.getAutoTokenName(rawName, imageUrl, '📦');
+
+      boardEngine.addToken(finalName, '📦', '#f59e0b', state.currentUser?.id, Math.max(cols, rows), imageUrl, true, {
+        cols,
+        rows,
+        isEquipment: true
+      });
+
+      this.showToast(`Equipamento '${finalName}' (${cols}x${rows}) inserido no tabuleiro!`, 'success');
     });
 
     // Token Spawner
@@ -496,11 +537,68 @@ class UIController {
       this.renderTurnBanner();
       this.renderRollLog();
       this.renderFloatingWidgetVisibility();
+      if (!this.activePoiseSheet) {
+        this.renderPoiseSheet(poiseLoader.getDefaultPoiseData());
+      }
 
       setTimeout(() => {
         boardEngine.init('tabletop-canvas-container');
       }, 50);
     }
+  }
+
+  renderPoiseSheet(sheetData) {
+    const editor = document.getElementById('poise-sheet-editor');
+    if (!editor) return;
+
+    if (!sheetData) sheetData = poiseLoader.getDefaultPoiseData();
+    this.activePoiseSheet = sheetData;
+
+    editor.innerHTML = `
+      <div style="position: relative; width: 100%; display: inline-block;">
+        ${sheetData.bgImage ? `<img src="${sheetData.bgImage}" style="width: 100%; display: block; height: auto;" />` : ''}
+        <div id="poise-fields-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto;">
+          ${(sheetData.fields || []).map((f, i) => {
+            const isTextarea = f.type === 'textarea';
+            const tag = isTextarea ? 'textarea' : 'input';
+            const inputType = isTextarea ? '' : 'type="text"';
+            const align = f.align || 'left';
+            const fontSize = Math.max(8, Math.round((f.fontSize || 12) * 0.75));
+
+            return `
+              <${tag} ${inputType}
+                data-field-index="${i}"
+                data-field-id="${f.id || ''}"
+                class="poise-field-input"
+                style="position: absolute; left: ${f.x}%; top: ${f.y}%; width: ${f.w}%; height: ${f.h}%; font-size: ${fontSize}px; text-align: ${align}; background: rgba(255,255,255,0.75); color: #0f172a; font-weight: bold; border: 1px dashed rgba(139,92,246,0.4); border-radius: 2px; padding: 1px 3px; box-sizing: border-box; resize: none; font-family: sans-serif;"
+                title="${f.name || f.id || ''}"
+              >${isTextarea ? (f.value || '') : ''}</${tag}>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    // Set non-textarea input values
+    editor.querySelectorAll('input.poise-field-input').forEach(el => {
+      const idx = el.dataset.fieldIndex;
+      if (idx !== undefined && sheetData.fields[idx]) {
+        el.value = sheetData.fields[idx].value || '';
+      }
+    });
+
+    // Bind input change events
+    editor.querySelectorAll('.poise-field-input').forEach(inputEl => {
+      inputEl.addEventListener('input', (e) => {
+        const idx = e.target.dataset.fieldIndex;
+        if (idx !== undefined && this.activePoiseSheet && this.activePoiseSheet.fields[idx]) {
+          this.activePoiseSheet.fields[idx].value = e.target.value;
+          
+          const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+          state.updateCharacterSheet(slotId, this.activePoiseSheet);
+        }
+      });
+    });
   }
 
   renderNav() {

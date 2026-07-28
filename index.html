@@ -189,13 +189,13 @@
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
-          <!-- TAB: Character Sheets (Planilhas 17x22) -->
+          <!-- TAB: Character Sheets (Planilhas Interativas .poise 17x22) -->
           <div class="tab-pane hidden" id="tab-pane-sheets">
-            <h4 style="margin-bottom: 6px; font-size: 0.85rem;">📋 Adicionar Imagem da Planilha</h4>
-            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em retângulos de 17x22.</p>
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Planilha Interativa (.poise)</h4>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">Planilha editável em tempo real. Altere os valores e baixe o arquivo atualizado.</p>
             
             <div class="form-group" style="margin-bottom: 8px;">
-              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga de Planilha</label>
+              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga da Planilha no Board</label>
               <select id="sheet-slot-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
                 <option value="0">📋 Planilha 1 (Esquerda Sup)</option>
                 <option value="1">📋 Planilha 2 (Esquerda Inf)</option>
@@ -205,18 +205,28 @@
               </select>
             </div>
 
-            <div class="form-group" style="margin-bottom: 8px;">
-              <label style="font-size: 0.75rem;">Imagem da Planilha (JPG/PNG)</label>
-              <input type="file" id="sheet-file-input" accept="image/*" class="form-control" style="font-size: 0.75rem; padding: 6px;" />
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+              <button class="btn btn-primary" id="btn-download-poise" style="font-size: 0.75rem; padding: 6px;">
+                💾 Baixar .poise
+              </button>
+              <label class="btn btn-secondary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
+                📂 Upload .poise
+                <input type="file" id="poise-file-input" accept=".poise,.json" style="display: none;" />
+              </label>
             </div>
 
-            <div style="display: flex; gap: 6px; margin-top: 8px;">
-              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
-                🎯 Focar na Planilha
+            <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+              <button class="btn btn-secondary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                🎯 Focar no Grid
               </button>
               <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
                 🗺️ Focar no Mapa
               </button>
+            </div>
+
+            <!-- Interactive Sheet Renderer (.poise overlay container) -->
+            <div id="poise-sheet-editor" style="position: relative; width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; background: #0f172a; min-height: 400px;">
+              <!-- Dynamically populated by UIController -->
             </div>
           </div>
 
@@ -326,6 +336,40 @@
                 👹 HobGoblin (2x2)
               </button>
             </div>
+
+            <!-- Master Equipment Cards Spawner (src/Equip/) -->
+            <h4 style="margin-bottom: 6px; font-size: 0.8rem; color: var(--accent-gold); margin-top: 10px;">📦 Inserir Equipamento no Grid (Mestre)</h4>
+            <form id="form-spawn-equip" style="margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label for="equip-card-select" style="font-size: 0.75rem;">Carta de Equipamento (src/Equip/)</label>
+                <select id="equip-card-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                  <option value="IC1x1" data-cols="1" data-rows="1">🛡️ IC1x1 (1x1 - Anel/Item Pequeno)</option>
+                  <option value="IC1x2" data-cols="1" data-rows="2">🗡️ IC1x2 (1x2 - Adaga/Varinha)</option>
+                  <option value="IC1x3" data-cols="1" data-rows="3">⚔️ IC1x3 (1x3 - Espada/Faca)</option>
+                  <option value="IC1x4" data-cols="1" data-rows="4">🏹 IC1x4 (1x4 - Arco/Lança)</option>
+                  <option value="IC2x1" data-cols="2" data-rows="1">🛡️ IC2x1 (2x1 - Broquel/Poção)</option>
+                  <option value="IC2x2" data-cols="2" data-rows="2" selected>🛡️ IC2x2 (2x2 - Escudo Médio)</option>
+                  <option value="IC2x3" data-cols="2" data-rows="3">🥋 IC2x3 (2x3 - Traje/Armadura)</option>
+                  <option value="IC2x4" data-cols="2" data-rows="4">🛡️ IC2x4 (2x4 - Escudo Torre)</option>
+                  <option value="IC3x1" data-cols="3" data-rows="1">🍞 IC3x1 (3x1 - Mantimentos)</option>
+                  <option value="IC3x2" data-cols="3" data-rows="2">📦 IC3x2 (3x2 - Caixa/Mochila)</option>
+                  <option value="IC3x3" data-cols="3" data-rows="3">📦 IC3x3 (3x3 - Baú/Carga)</option>
+                  <option value="IC3x4" data-cols="3" data-rows="4">📜 IC3x4 (3x4 - Pergaminho/Grimório)</option>
+                  <option value="IC4x1" data-cols="4" data-rows="1">🦯 IC4x1 (4x1 - Cajado Grande)</option>
+                  <option value="IC4x2" data-cols="4" data-rows="2">📜 IC4x2 (4x2 - Estandarte)</option>
+                  <option value="IC4x3" data-cols="4" data-rows="3">⛺ IC4x3 (4x3 - Tenda/Kit)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label for="equip-name-input" style="font-size: 0.75rem;">Nome do Item (Opcional)</label>
+                <input type="text" id="equip-name-input" class="form-control" placeholder="Ex: Espada Longa" style="font-size: 0.8rem; padding: 6px;" />
+              </div>
+
+              <button type="submit" class="btn btn-secondary" style="width: 100%; font-size: 0.8rem; padding: 6px; border-color: var(--accent-gold); color: var(--accent-gold);">
+                📦 Inserir Equipamento no Tabuleiro
+              </button>
+            </form>
 
             <!-- Token Edit Section (Shows when token is selected) -->
             <div id="token-edit-panel" class="hidden" style="padding: 10px; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--accent-primary); border-radius: var(--radius-sm); margin-top: 10px;">
