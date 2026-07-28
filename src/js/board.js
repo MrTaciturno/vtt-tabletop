@@ -784,7 +784,7 @@ class BoardEngine {
 
     stage.addChild(drawingsGfx);
 
-    // Layer 2: Character Sheet Slots
+    // Layer 2: Character Sheet Slots (17x22 Regions)
     const slots = this.getSlots();
     const sheets = state.characterSheets || {};
 
@@ -795,19 +795,23 @@ class BoardEngine {
       const slotPixelH = slot.rows * this.cellSize;
 
       const sheet = sheets[slot.id];
+      const imgUrl = sheet?.bgImage || sheet?.imageUrl || null;
+
       const slotContainer = new PIXI.Container();
       slotContainer.x = slotPixelX;
       slotContainer.y = slotPixelY;
+      slotContainer.eventMode = 'static';
+      slotContainer.cursor = 'pointer';
 
       const slotGfx = new PIXI.Graphics();
 
-      if (sheet && sheet.imageUrl) {
+      if (imgUrl) {
         slotGfx.beginFill(0x0f172a, 0.95);
         slotGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         slotGfx.endFill();
         slotContainer.addChild(slotGfx);
 
-        const sheetTexture = PIXI.Texture.from(sheet.imageUrl);
+        const sheetTexture = PIXI.Texture.from(imgUrl);
         const sheetSprite = new PIXI.Sprite(sheetTexture);
 
         sheetTexture.baseTexture.on('loaded', () => {
@@ -837,7 +841,7 @@ class BoardEngine {
         borderGfx.endFill();
         slotContainer.addChild(borderGfx);
 
-        const labelText = new PIXI.Text(`📋 Planilha: ${sheet.ownerName}`, {
+        const labelText = new PIXI.Text(`📋 ${sheet.ownerName || sheet.name || 'Planilha'} (Clique p/ Abrir)`, {
           fontFamily: 'sans-serif',
           fontSize: 12,
           fontWeight: 'bold',
@@ -870,9 +874,9 @@ class BoardEngine {
         labelText.y = 6;
         slotContainer.addChild(labelText);
 
-        const placeholderText = new PIXI.Text(`📋 ${slot.label}\nVaga de Planilha 17x22`, {
+        const placeholderText = new PIXI.Text(`📋 ${slot.label}\nVaga de Planilha 17x22\n(Clique para abrir / carregar)`, {
           fontFamily: 'sans-serif',
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 'bold',
           fill: 0xeab308,
           align: 'center'
@@ -882,6 +886,10 @@ class BoardEngine {
         placeholderText.y = slotPixelH / 2;
         slotContainer.addChild(placeholderText);
       }
+
+      slotContainer.on('pointerdown', () => {
+        state.notify('SHEET_SLOT_CLICKED', { slotId: slot.id, sheetData: sheet });
+      });
 
       stage.addChild(slotContainer);
     });

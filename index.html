@@ -19,6 +19,24 @@
 </head>
 <body>
 
+  <!-- Interactive .poise Board Sheet Modal Overlay -->
+  <div id="board-poise-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: rgba(0,0,0,0.8); backdrop-filter: blur(6px); display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
+    <div class="glass-panel" style="width: 90vw; max-width: 900px; max-height: 92vh; overflow-y: auto; background: rgba(15, 23, 42, 0.98); border: 2px solid var(--accent-gold); border-radius: var(--radius-md); padding: 16px; position: relative;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+        <h3 id="poise-modal-title" style="margin: 0; font-size: 1.1rem; color: var(--accent-gold);">📋 Planilha de Personagem (.poise)</h3>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary" id="btn-modal-save-poise" style="font-size: 0.75rem; padding: 4px 10px;">💾 Baixar .poise</button>
+          <button class="btn btn-danger" id="btn-close-poise-modal" style="font-size: 0.75rem; padding: 4px 10px;">✕ Fechar</button>
+        </div>
+      </div>
+
+      <div id="poise-modal-editor-container" style="position: relative; width: 100%; background: #0f172a; border-radius: var(--radius-sm); overflow: hidden;">
+        <!-- Interactive percentage fields rendered here -->
+      </div>
+    </div>
+  </div>
+
   <!-- Temporary Global Room Dice Announcement Overlay (Shows for 4s for all players) -->
   <div id="global-dice-announcement" class="hidden" style="position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 99999; pointer-events: none;">
     <div style="padding: 12px 28px; border: 2px solid var(--accent-gold); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center; background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(8px);">
@@ -189,13 +207,13 @@
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
-          <!-- TAB: Character Sheets (Planilhas Interativas .poise 17x22) -->
+          <!-- TAB: Character Sheets (Regiões de Planilha 17x22) -->
           <div class="tab-pane hidden" id="tab-pane-sheets">
-            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Planilha Interativa (.poise)</h4>
-            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">Planilha editável em tempo real. Altere os valores e baixe o arquivo atualizado.</p>
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Regiões de Planilha (17x22)</h4>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">Selecione uma vaga de 17x22 no tabuleiro e faça o upload do seu arquivo .poise ou imagem.</p>
             
             <div class="form-group" style="margin-bottom: 8px;">
-              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga da Planilha no Board</label>
+              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga no Tabuleiro</label>
               <select id="sheet-slot-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
                 <option value="0">📋 Planilha 1 (Esquerda Sup)</option>
                 <option value="1">📋 Planilha 2 (Esquerda Inf)</option>
@@ -206,28 +224,28 @@
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
-              <button class="btn btn-primary" id="btn-download-poise" style="font-size: 0.75rem; padding: 6px;">
-                💾 Baixar .poise
-              </button>
-              <label class="btn btn-secondary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
+              <label class="btn btn-primary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
                 📂 Upload .poise
                 <input type="file" id="poise-file-input" accept=".poise,.json" style="display: none;" />
               </label>
+              <label class="btn btn-secondary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
+                🖼️ Upload Imagem
+                <input type="file" id="sheet-file-input" accept="image/*" style="display: none;" />
+              </label>
             </div>
 
-            <div style="display: flex; gap: 6px; margin-bottom: 12px;">
-              <button class="btn btn-secondary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
-                🎯 Focar no Grid
+            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px; border-color: var(--accent-gold); color: var(--accent-gold);">
+                🎯 Focar / Abrir Planilha
               </button>
               <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
                 🗺️ Focar no Mapa
               </button>
             </div>
 
-            <!-- Interactive Sheet Renderer (.poise overlay container) -->
-            <div id="poise-sheet-editor" style="position: relative; width: 100%; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; background: #0f172a; min-height: 400px;">
-              <!-- Dynamically populated by UIController -->
-            </div>
+            <button class="btn btn-secondary" id="btn-download-poise" style="width: 100%; font-size: 0.75rem; padding: 6px;">
+              💾 Baixar .poise Atualizado
+            </button>
           </div>
 
           <!-- TAB 1: Map & Grid Settings (Master Only) -->

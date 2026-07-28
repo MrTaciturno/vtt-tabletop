@@ -77,6 +77,8 @@ class UIController {
       this.showGlobalDiceAnnouncement(data);
     } else if (event === 'DICE_SELECTED') {
       this.updateDiceSelectionUI(data);
+    } else if (event === 'SHEET_SLOT_CLICKED') {
+      this.openPoiseModal(data.slotId, data.sheetData);
     }
   }
 
@@ -197,35 +199,74 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
-    // Character Sheet Controls (.poise loader, editor, export & import)
-    document.getElementById('sheet-slot-select')?.addEventListener('change', (e) => {
-      const slotId = e.target.value;
-      const sheetData = state.characterSheets[slotId] || poiseLoader.getDefaultPoiseData();
-      this.renderPoiseSheet(sheetData);
+    // Character Sheet Controls (.poise upload, image upload, focus & modal)
+    document.getElementById('btn-download-poise')?.addEventListener('click', () => {
+      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+      const sheetData = state.characterSheets[slotId] || this.activePoiseSheet;
+      if (sheetData && (sheetData.fields || sheetData.bgImage)) {
+        const charNameField = (sheetData.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
+        const name = charNameField?.value?.trim()?.split('\n')[0] || `Planilha_Vaga_${Number(slotId) + 1}`;
+        poiseLoader.exportPoiseFile(sheetData, `${name}.poise`);
+        this.showToast(`Planilha '${name}.poise' baixada com sucesso!`, 'success');
+      } else {
+        this.showToast('Nenhuma planilha carregada para baixar nesta vaga.', 'error');
+      }
     });
 
-    document.getElementById('btn-download-poise')?.addEventListener('click', () => {
-      if (this.activePoiseSheet) {
-        const charNameField = (this.activePoiseSheet.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
-        const name = charNameField?.value?.trim()?.split('\n')[0] || 'Planilha';
-        poiseLoader.exportPoiseFile(this.activePoiseSheet, `${name}.poise`);
+    document.getElementById('btn-modal-save-poise')?.addEventListener('click', () => {
+      const slotId = this.activePoiseSlotId || 0;
+      const sheetData = state.characterSheets[slotId] || this.activePoiseSheet;
+      if (sheetData && (sheetData.fields || sheetData.bgImage)) {
+        const charNameField = (sheetData.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
+        const name = charNameField?.value?.trim()?.split('\n')[0] || `Planilha_Vaga_${Number(slotId) + 1}`;
+        poiseLoader.exportPoiseFile(sheetData, `${name}.poise`);
         this.showToast(`Planilha '${name}.poise' baixada com sucesso!`, 'success');
+      }
+    });
+
+    document.getElementById('btn-close-poise-modal')?.addEventListener('click', () => {
+      this.closePoiseModal();
+    });
+
+    document.getElementById('board-poise-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'board-poise-modal') {
+        this.closePoiseModal();
       }
     });
 
     document.getElementById('poise-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
+      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
       if (file) {
         poiseLoader.parsePoiseFile(file, (err, parsedData) => {
           if (err) {
             this.showToast(err.message, 'error');
           } else {
-            this.activePoiseSheet = parsedData;
-            this.renderPoiseSheet(parsedData);
-            const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+            parsedData.ownerId = state.currentUser?.id;
+            parsedData.ownerName = state.currentUser?.username || 'Jogador';
             state.updateCharacterSheet(slotId, parsedData);
-            this.showToast('Planilha .poise carregada!', 'success');
+            this.showToast(`Planilha .poise alocada na Vaga ${Number(slotId) + 1}!`, 'success');
+            boardEngine.focusSlot(slotId);
+            this.openPoiseModal(slotId, parsedData);
           }
+        });
+      }
+    });
+
+    document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
+      if (file) {
+        this.showToast('Processando imagem da planilha...', 'info');
+        this.compressMapImage(file, (optimizedDataUrl) => {
+          const sheetData = state.characterSheets[slotId] || poiseLoader.createEmptyPoiseSheet();
+          sheetData.bgImage = optimizedDataUrl;
+          sheetData.imageUrl = optimizedDataUrl;
+          sheetData.ownerId = state.currentUser?.id;
+          sheetData.ownerName = state.currentUser?.username || 'Jogador';
+          state.updateCharacterSheet(slotId, sheetData);
+          this.showToast(`Imagem de planilha alocada na Vaga ${Number(slotId) + 1}!`, 'success');
+          boardEngine.focusSlot(slotId);
         });
       }
     });
@@ -233,6 +274,8 @@ class UIController {
     document.getElementById('btn-focus-sheet')?.addEventListener('click', () => {
       const slotId = document.getElementById('sheet-slot-select')?.value || 0;
       boardEngine.focusSlot(slotId);
+      const sheetData = state.characterSheets[slotId];
+      this.openPoiseModal(slotId, sheetData);
     });
 
     document.getElementById('btn-focus-map')?.addEventListener('click', () => {
@@ -537,9 +580,6 @@ class UIController {
       this.renderTurnBanner();
       this.renderRollLog();
       this.renderFloatingWidgetVisibility();
-      if (!this.activePoiseSheet) {
-        this.renderPoiseSheet(poiseLoader.getDefaultPoiseData());
-      }
 
       setTimeout(() => {
         boardEngine.init('tabletop-canvas-container');
@@ -547,14 +587,65 @@ class UIController {
     }
   }
 
-  renderPoiseSheet(sheetData) {
-    const editor = document.getElementById('poise-sheet-editor');
-    if (!editor) return;
+  openPoiseModal(slotId, sheetData) {
+    const modal = document.getElementById('board-poise-modal');
+    const container = document.getElementById('poise-modal-editor-container');
+    const titleEl = document.getElementById('poise-modal-title');
+    if (!modal || !container) return;
 
-    if (!sheetData) sheetData = poiseLoader.getDefaultPoiseData();
+    this.activePoiseSlotId = slotId;
+    this.activePoiseSheet = sheetData || poiseLoader.createEmptyPoiseSheet();
+
+    const charNameField = (this.activePoiseSheet.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
+    const charName = charNameField?.value?.trim()?.split('\n')[0] || `Vaga ${Number(slotId) + 1}`;
+    if (titleEl) titleEl.textContent = `📋 Planilha: ${charName} (Vaga ${Number(slotId) + 1})`;
+
+    this.renderPoiseSheetInContainer(container, this.activePoiseSheet, slotId);
+    modal.classList.remove('hidden');
+  }
+
+  closePoiseModal() {
+    const modal = document.getElementById('board-poise-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  renderPoiseSheetInContainer(container, sheetData, slotId) {
+    if (!sheetData) sheetData = poiseLoader.createEmptyPoiseSheet();
     this.activePoiseSheet = sheetData;
 
-    editor.innerHTML = `
+    if (!sheetData.bgImage && (!sheetData.fields || sheetData.fields.length === 0)) {
+      container.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: var(--accent-gold);">
+          <h4 style="margin-bottom: 8px;">📋 Vaga ${Number(slotId) + 1} Vazia</h4>
+          <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px;">Faça upload do seu arquivo <strong>.poise</strong> ou imagem na barra lateral para exibir e editar sua planilha nesta vaga de 17x22.</p>
+          <label class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 16px; cursor: pointer;">
+            📂 Carregar Arquivo .poise Nesta Vaga
+            <input type="file" class="modal-poise-upload-input" accept=".poise,.json" style="display: none;" />
+          </label>
+        </div>
+      `;
+
+      container.querySelector('.modal-poise-upload-input')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          poiseLoader.parsePoiseFile(file, (err, parsedData) => {
+            if (err) {
+              this.showToast(err.message, 'error');
+            } else {
+              parsedData.ownerId = state.currentUser?.id;
+              parsedData.ownerName = state.currentUser?.username || 'Jogador';
+              this.activePoiseSheet = parsedData;
+              state.updateCharacterSheet(slotId, parsedData);
+              this.renderPoiseSheetInContainer(container, parsedData, slotId);
+              this.showToast('Planilha .poise carregada com sucesso!', 'success');
+            }
+          });
+        }
+      });
+      return;
+    }
+
+    container.innerHTML = `
       <div style="position: relative; width: 100%; display: inline-block;">
         ${sheetData.bgImage ? `<img src="${sheetData.bgImage}" style="width: 100%; display: block; height: auto;" />` : ''}
         <div id="poise-fields-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto;">
@@ -563,7 +654,7 @@ class UIController {
             const tag = isTextarea ? 'textarea' : 'input';
             const inputType = isTextarea ? '' : 'type="text"';
             const align = f.align || 'left';
-            const fontSize = Math.max(8, Math.round((f.fontSize || 12) * 0.75));
+            const fontSize = Math.max(9, Math.round((f.fontSize || 12) * 0.8));
 
             return `
               <${tag} ${inputType}
@@ -580,7 +671,7 @@ class UIController {
     `;
 
     // Set non-textarea input values
-    editor.querySelectorAll('input.poise-field-input').forEach(el => {
+    container.querySelectorAll('input.poise-field-input').forEach(el => {
       const idx = el.dataset.fieldIndex;
       if (idx !== undefined && sheetData.fields[idx]) {
         el.value = sheetData.fields[idx].value || '';
@@ -588,13 +679,11 @@ class UIController {
     });
 
     // Bind input change events
-    editor.querySelectorAll('.poise-field-input').forEach(inputEl => {
+    container.querySelectorAll('.poise-field-input').forEach(inputEl => {
       inputEl.addEventListener('input', (e) => {
         const idx = e.target.dataset.fieldIndex;
         if (idx !== undefined && this.activePoiseSheet && this.activePoiseSheet.fields[idx]) {
           this.activePoiseSheet.fields[idx].value = e.target.value;
-          
-          const slotId = document.getElementById('sheet-slot-select')?.value || 0;
           state.updateCharacterSheet(slotId, this.activePoiseSheet);
         }
       });
