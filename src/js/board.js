@@ -493,8 +493,8 @@ class BoardEngine {
         this.render();
 
       } else if (this.draggedToken && container) {
-        this.dragCurrentPixelX = worldPos.x - this.dragGrabOffsetX;
-        this.dragCurrentPixelY = worldPos.y - this.dragGrabOffsetY;
+        this.dragCurrentPixelX = worldPos.x;
+        this.dragCurrentPixelY = worldPos.y;
         this.render();
 
       } else if (this.isPanning) {
@@ -559,8 +559,9 @@ class BoardEngine {
 
       if (this.draggedToken) {
         const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
-        const gridX = Math.max(0, Math.min(this.totalCols - tSize, Math.round(this.dragCurrentPixelX / this.cellSize)));
-        const gridY = Math.max(0, Math.min(this.totalRows - tSize, Math.round(this.dragCurrentPixelY / this.cellSize)));
+        const halfOffset = (tSize / 2) * this.cellSize;
+        const gridX = Math.max(0, Math.min(this.totalCols - tSize, Math.round((this.dragCurrentPixelX - halfOffset) / this.cellSize)));
+        const gridY = Math.max(0, Math.min(this.totalRows - tSize, Math.round((this.dragCurrentPixelY - halfOffset) / this.cellSize)));
 
         this.moveToken(this.draggedToken.id, gridX, gridY, true);
         this.draggedToken = null;
@@ -577,8 +578,9 @@ class BoardEngine {
         e.preventDefault();
 
         const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
-        const targetX = Math.max(0, Math.min(this.totalCols - tSize, Math.round(this.dragCurrentPixelX / this.cellSize)));
-        const targetY = Math.max(0, Math.min(this.totalRows - tSize, Math.round(this.dragCurrentPixelY / this.cellSize)));
+        const halfOffset = (tSize / 2) * this.cellSize;
+        const targetX = Math.max(0, Math.min(this.totalCols - tSize, Math.round((this.dragCurrentPixelX - halfOffset) / this.cellSize)));
+        const targetY = Math.max(0, Math.min(this.totalRows - tSize, Math.round((this.dragCurrentPixelY - halfOffset) / this.cellSize)));
 
         const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
         if (!lastWp || lastWp.x !== targetX || lastWp.y !== targetY) {
@@ -945,12 +947,9 @@ class BoardEngine {
 
           const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
           
-          // Grab offset relative to token top-left corner
-          this.dragGrabOffsetX = worldPos.x - (t.x * this.cellSize);
-          this.dragGrabOffsetY = worldPos.y - (t.y * this.cellSize);
-
-          this.dragCurrentPixelX = t.x * this.cellSize;
-          this.dragCurrentPixelY = t.y * this.cellSize;
+          // Token center directly under cursor on click
+          this.dragCurrentPixelX = worldPos.x;
+          this.dragCurrentPixelY = worldPos.y;
 
           e.stopPropagation();
           this.render();
@@ -992,15 +991,15 @@ class BoardEngine {
       const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
       const lastPxX = lastWp.x * this.cellSize + tokOffset;
       const lastPxY = lastWp.y * this.cellSize + tokOffset;
-      const currPxX = this.dragCurrentPixelX + tokOffset;
-      const currPxY = this.dragCurrentPixelY + tokOffset;
+      const currPxX = this.dragCurrentPixelX;
+      const currPxY = this.dragCurrentPixelY;
 
       vectorGfx.moveTo(lastPxX, lastPxY);
       vectorGfx.lineTo(currPxX, currPxY);
 
       // Active segment distance in grid units
-      const activeGridX = this.dragCurrentPixelX / this.cellSize;
-      const activeGridY = this.dragCurrentPixelY / this.cellSize;
+      const activeGridX = (currPxX - tokOffset) / this.cellSize;
+      const activeGridY = (currPxY - tokOffset) / this.cellSize;
       accumulatedDist += Math.hypot(activeGridX - lastWp.x, activeGridY - lastWp.y);
 
       // Vector Arrowhead at current cursor position
