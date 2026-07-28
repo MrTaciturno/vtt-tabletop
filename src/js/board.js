@@ -76,7 +76,7 @@ class BoardEngine {
 
     // Network Throttling & Lerp Animation State
     this.lastDragEmitTime = 0;
-    this.DRAG_EMIT_INTERVAL = 33; // 30Hz network limit (33ms)
+    this.DRAG_EMIT_INTERVAL = 20; // 50Hz network limit (20ms)
     this.animatingSmoothTokens = false;
 
     // Bindings
@@ -397,8 +397,8 @@ class BoardEngine {
           const dy = t.targetY - t.y;
 
           if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
-            t.x += dx * 0.35;
-            t.y += dy * 0.35;
+            t.x += dx * 0.45;
+            t.y += dy * 0.45;
             stillAnimating = true;
           } else {
             t.x = t.targetX;
