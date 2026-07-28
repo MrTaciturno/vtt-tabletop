@@ -812,7 +812,7 @@ class BoardEngine {
 
         // Edit Sheet Button in Slot Header
         const editBtnGfx = new PIXI.Graphics();
-        editBtnGfx.beginFill(0x0f172a, 0.9);
+        editBtnGfx.beginFill(0x0f172a, 0.95);
         editBtnGfx.drawRoundedRect(slotPixelW - 125, 3, 118, 20, 4);
         editBtnGfx.endFill();
         editBtnGfx.eventMode = 'static';
@@ -826,11 +826,18 @@ class BoardEngine {
         });
         editBtnText.x = slotPixelW - 120;
         editBtnText.y = 6;
+        editBtnText.eventMode = 'static';
+        editBtnText.cursor = 'pointer';
 
-        editBtnGfx.on('pointerdown', (e) => {
+        const triggerModal = (e) => {
+          if (e && e.stopPropagation) e.stopPropagation();
           state.notify('OPEN_SHEET_MODAL', { slotId: slot.id });
-          e.stopPropagation();
-        });
+        };
+
+        editBtnGfx.on('pointerdown', triggerModal);
+        editBtnGfx.on('click', triggerModal);
+        editBtnText.on('pointerdown', triggerModal);
+        editBtnText.on('click', triggerModal);
 
         slotContainer.addChild(editBtnGfx);
         slotContainer.addChild(editBtnText);
@@ -857,6 +864,38 @@ class BoardEngine {
         labelText.x = 10;
         labelText.y = 6;
         slotContainer.addChild(labelText);
+
+        // Edit Sheet Button in Empty Slot Header
+        const editBtnGfx = new PIXI.Graphics();
+        editBtnGfx.beginFill(0x0f172a, 0.95);
+        editBtnGfx.drawRoundedRect(slotPixelW - 125, 3, 118, 20, 4);
+        editBtnGfx.endFill();
+        editBtnGfx.eventMode = 'static';
+        editBtnGfx.cursor = 'pointer';
+
+        const editBtnText = new PIXI.Text(`✏️ Editar Planilha`, {
+          fontFamily: 'sans-serif',
+          fontSize: 10,
+          fontWeight: 'bold',
+          fill: 0xeab308
+        });
+        editBtnText.x = slotPixelW - 120;
+        editBtnText.y = 6;
+        editBtnText.eventMode = 'static';
+        editBtnText.cursor = 'pointer';
+
+        const triggerModal = (e) => {
+          if (e && e.stopPropagation) e.stopPropagation();
+          state.notify('OPEN_SHEET_MODAL', { slotId: slot.id });
+        };
+
+        editBtnGfx.on('pointerdown', triggerModal);
+        editBtnGfx.on('click', triggerModal);
+        editBtnText.on('pointerdown', triggerModal);
+        editBtnText.on('click', triggerModal);
+
+        slotContainer.addChild(editBtnGfx);
+        slotContainer.addChild(editBtnText);
 
         const placeholderText = new PIXI.Text(`📋 ${slot.label}\nVaga de Planilha 17x22`, {
           fontFamily: 'sans-serif',

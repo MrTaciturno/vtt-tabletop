@@ -493,6 +493,7 @@ class UIController {
   updateSheetSelectOptions() {
     const selectEl = document.getElementById('sheet-slot-select');
     if (!selectEl) return;
+    if (document.activeElement === selectEl) return;
 
     const currentUserId = state.currentUser?.id;
     const sheets = state.characterSheets || {};
@@ -753,32 +754,44 @@ class UIController {
     const title = document.getElementById('modal-sheet-title');
     if (!modal || !form) return;
 
-    this.activeModalSlotId = slotId;
+    const sId = Number(slotId);
+    this.activeModalSlotId = sId;
 
-    const sheet = state.characterSheets[slotId];
+    let sheet = state.characterSheets[sId];
     if (!sheet || !sheet.poiseData || !sheet.poiseData.fields) {
-      this.showToast(`Nenhuma planilha .poise carregada na Vaga ${slotId + 1}.`, 'info');
-      return;
+      const currentUser = state.currentUser || { id: 'anon', username: 'Jogador' };
+      sheet = {
+        slotId: sId,
+        ownerId: currentUser.id,
+        ownerName: currentUser.username,
+        poiseData: defaultPoiseData,
+        fieldValues: sheet?.fieldValues || {},
+        updatedAt: Date.now()
+      };
+      state.updateCharacterSheet(sId, sheet);
+      network.broadcast('SHEET_UPDATED', sheet);
     }
 
     if (title) {
-      title.textContent = `✏️ Editar Planilha (Vaga ${slotId + 1} - ${sheet.ownerName || 'Jogador'})`;
+      title.textContent = `✏️ Editar Planilha (Vaga ${sId + 1} - ${sheet.ownerName || 'Jogador'})`;
     }
 
-    form.innerHTML = sheet.poiseData.fields.map(f => {
-      const val = (sheet.fieldValues && sheet.fieldValues[f.id] !== undefined) ? sheet.fieldValues[f.id] : (f.value || '');
-      const isTextarea = f.type === 'textarea' || (f.h && f.h > 6);
+    if (sheet.poiseData && sheet.poiseData.fields) {
+      form.innerHTML = sheet.poiseData.fields.map(f => {
+        const val = (sheet.fieldValues && sheet.fieldValues[f.id] !== undefined) ? sheet.fieldValues[f.id] : (f.value || '');
+        const isTextarea = f.type === 'textarea' || (f.h && f.h > 6);
 
-      return `
-        <div class="form-group" style="margin-bottom: 8px; ${isTextarea ? 'grid-column: span 2;' : ''}">
-          <label style="font-size: 0.75rem; color: #e2e8f0; margin-bottom: 2px; font-weight: bold;">${f.name || f.id}</label>
-          ${isTextarea ? 
-            `<textarea class="form-control modal-field-input" data-field="${f.id}" rows="2" style="font-size: 0.8rem; padding: 6px;">${val}</textarea>` :
-            `<input type="text" class="form-control modal-field-input" data-field="${f.id}" value="${val}" style="font-size: 0.8rem; padding: 6px;" />`
-          }
-        </div>
-      `;
-    }).join('');
+        return `
+          <div class="form-group" style="margin-bottom: 8px; ${isTextarea ? 'grid-column: span 2;' : ''}">
+            <label style="font-size: 0.75rem; color: #e2e8f0; margin-bottom: 2px; font-weight: bold;">${f.name || f.id}</label>
+            ${isTextarea ? 
+              `<textarea class="form-control modal-field-input" data-field="${f.id}" rows="2" style="font-size: 0.8rem; padding: 6px;">${val}</textarea>` :
+              `<input type="text" class="form-control modal-field-input" data-field="${f.id}" value="${val}" style="font-size: 0.8rem; padding: 6px;" />`
+            }
+          </div>
+        `;
+      }).join('');
+    }
 
     modal.classList.remove('hidden');
   }

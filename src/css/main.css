@@ -181,13 +181,25 @@ h1, h2, h3, h4, .font-heading {
   width: 100%;
   padding: 12px 16px;
   border-radius: var(--radius-sm);
-  background: rgba(10, 14, 23, 0.7);
+  background: rgba(10, 14, 23, 0.85);
   border: 1px solid var(--glass-border);
   color: var(--text-main);
   font-family: var(--font-body);
   font-size: 0.95rem;
   outline: none;
   transition: var(--transition);
+}
+
+select.form-control {
+  cursor: pointer;
+  background-color: rgba(15, 23, 42, 0.95);
+  color: #f8fafc;
+}
+
+select.form-control option {
+  background-color: #0f172a;
+  color: #f8fafc;
+  padding: 8px;
 }
 
 .form-control:focus {
