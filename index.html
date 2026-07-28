@@ -19,24 +19,6 @@
 </head>
 <body>
 
-  <!-- Interactive .poise Board Sheet Modal Overlay -->
-  <div id="board-poise-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; background: rgba(0,0,0,0.8); backdrop-filter: blur(6px); display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;">
-    <div class="glass-panel" style="width: 90vw; max-width: 900px; max-height: 92vh; overflow-y: auto; background: rgba(15, 23, 42, 0.98); border: 2px solid var(--accent-gold); border-radius: var(--radius-md); padding: 16px; position: relative;">
-      
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
-        <h3 id="poise-modal-title" style="margin: 0; font-size: 1.1rem; color: var(--accent-gold);">📋 Planilha de Personagem (.poise)</h3>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-primary" id="btn-modal-save-poise" style="font-size: 0.75rem; padding: 4px 10px;">💾 Baixar .poise</button>
-          <button class="btn btn-danger" id="btn-close-poise-modal" style="font-size: 0.75rem; padding: 4px 10px;">✕ Fechar</button>
-        </div>
-      </div>
-
-      <div id="poise-modal-editor-container" style="position: relative; width: 100%; background: #0f172a; border-radius: var(--radius-sm); overflow: hidden;">
-        <!-- Interactive percentage fields rendered here -->
-      </div>
-    </div>
-  </div>
-
   <!-- Temporary Global Room Dice Announcement Overlay (Shows for 4s for all players) -->
   <div id="global-dice-announcement" class="hidden" style="position: fixed; top: 50px; left: 50%; transform: translateX(-50%); z-index: 99999; pointer-events: none;">
     <div style="padding: 12px 28px; border: 2px solid var(--accent-gold); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); text-align: center; background: rgba(15, 23, 42, 0.96); backdrop-filter: blur(8px);">
@@ -207,13 +189,13 @@
             <button class="menu-tab-btn" data-tab="dice">🎲 Dados</button>
           </div>
 
-          <!-- TAB: Character Sheets (Regiões de Planilha 17x22) -->
+          <!-- TAB: Character Sheets (Planilhas 17x22) -->
           <div class="tab-pane hidden" id="tab-pane-sheets">
-            <h4 style="margin-bottom: 6px; font-size: 0.85rem; color: var(--accent-gold);">📋 Regiões de Planilha (17x22)</h4>
-            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">Selecione uma vaga de 17x22 no tabuleiro e faça o upload do seu arquivo .poise ou imagem.</p>
+            <h4 style="margin-bottom: 6px; font-size: 0.85rem;">📋 Adicionar Imagem da Planilha</h4>
+            <p class="text-muted" style="font-size: 0.75rem; margin-bottom: 8px;">As planilhas ficam situadas no grid ao redor do mapa em retângulos de 17x22.</p>
             
             <div class="form-group" style="margin-bottom: 8px;">
-              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga no Tabuleiro</label>
+              <label for="sheet-slot-select" style="font-size: 0.75rem;">Selecione a Vaga de Planilha</label>
               <select id="sheet-slot-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
                 <option value="0">📋 Planilha 1 (Esquerda Sup)</option>
                 <option value="1">📋 Planilha 2 (Esquerda Inf)</option>
@@ -223,29 +205,19 @@
               </select>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
-              <label class="btn btn-primary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
-                📂 Upload .poise
-                <input type="file" id="poise-file-input" accept=".poise,.json" style="display: none;" />
-              </label>
-              <label class="btn btn-secondary" style="font-size: 0.75rem; padding: 6px; text-align: center; margin: 0; cursor: pointer;">
-                🖼️ Upload Imagem
-                <input type="file" id="sheet-file-input" accept="image/*" style="display: none;" />
-              </label>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="font-size: 0.75rem;">Imagem da Planilha (JPG/PNG)</label>
+              <input type="file" id="sheet-file-input" accept="image/*" class="form-control" style="font-size: 0.75rem; padding: 6px;" />
             </div>
 
-            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
-              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px; border-color: var(--accent-gold); color: var(--accent-gold);">
-                🎯 Focar / Abrir Planilha
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+              <button class="btn btn-primary" id="btn-focus-sheet" style="flex: 1; font-size: 0.75rem; padding: 6px;">
+                🎯 Focar na Planilha
               </button>
               <button class="btn btn-secondary" id="btn-focus-map" style="flex: 1; font-size: 0.75rem; padding: 6px;">
                 🗺️ Focar no Mapa
               </button>
             </div>
-
-            <button class="btn btn-secondary" id="btn-download-poise" style="width: 100%; font-size: 0.75rem; padding: 6px;">
-              💾 Baixar .poise Atualizado
-            </button>
           </div>
 
           <!-- TAB 1: Map & Grid Settings (Master Only) -->
@@ -291,13 +263,28 @@
 
               <!-- Local Image Library Selection -->
               <div class="form-group" style="margin-bottom: 6px;">
-                <label for="token-img-select" style="font-size: 0.75rem;">Imagem da Pasta src/Tokens/</label>
+                <label for="token-img-select" style="font-size: 0.75rem;">Imagem da Pasta src/img/</label>
                 <select id="token-img-select" name="tokenImg" class="form-control" style="font-size: 0.8rem; padding: 6px;">
                   <option value="">-- Usar Emoji / Ícone Abaixo --</option>
-                  <option value="./src/Tokens/DemonBabau.png">😈 DemonBabau.png</option>
-                  <option value="./src/Tokens/Ghoul.png">🧟 Ghoul.png</option>
-                  <option value="./src/Tokens/Goblin.png">👺 Goblin.png</option>
-                  <option value="./src/Tokens/HobGoblin.png">👹 HobGoblin.png</option>
+                  <option value="./src/img/DemonBabau.png">😈 DemonBabau.png</option>
+                  <option value="./src/img/Ghoul.png">🧟 Ghoul.png</option>
+                  <option value="./src/img/Goblin.png">👺 Goblin.png</option>
+                  <option value="./src/img/HobGoblin.png">👹 HobGoblin.png</option>
+                  <option value="./src/img/IC1x1.png">📏 IC1x1.png</option>
+                  <option value="./src/img/IC1x2.png">📏 IC1x2.png</option>
+                  <option value="./src/img/IC1x3.png">📏 IC1x3.png</option>
+                  <option value="./src/img/IC1x4.png">📏 IC1x4.png</option>
+                  <option value="./src/img/IC2x1.png">📏 IC2x1.png</option>
+                  <option value="./src/img/IC2x2.png">📏 IC2x2.png</option>
+                  <option value="./src/img/IC2x3.png">📏 IC2x3.png</option>
+                  <option value="./src/img/IC2x4.png">📏 IC2x4.png</option>
+                  <option value="./src/img/IC3x1.png">📏 IC3x1.png</option>
+                  <option value="./src/img/IC3x2.png">📏 IC3x2.png</option>
+                  <option value="./src/img/IC3x3.png">📏 IC3x3.png</option>
+                  <option value="./src/img/IC3x4.png">📏 IC3x4.png</option>
+                  <option value="./src/img/IC4x1.png">📏 IC4x1.png</option>
+                  <option value="./src/img/IC4x2.png">📏 IC4x2.png</option>
+                  <option value="./src/img/IC4x3.png">📏 IC4x3.png</option>
                 </select>
               </div>
 
@@ -341,53 +328,19 @@
 
             <h4 style="margin-bottom: 6px; font-size: 0.8rem; color: var(--text-muted);">Tokens Rápidos</h4>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px;">
-              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="😈" data-img="./src/Tokens/DemonBabau.png" data-size="2" data-color="#ef4444" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="😈" data-img="./src/img/DemonBabau.png" data-size="2" data-color="#ef4444" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 😈 DemonBabau (2x2)
               </button>
-              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="🧟" data-img="./src/Tokens/Ghoul.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="🧟" data-img="./src/img/Ghoul.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 🧟 Ghoul (1x1)
               </button>
-              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👺" data-img="./src/Tokens/Goblin.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👺" data-img="./src/img/Goblin.png" data-size="1" data-color="#10b981" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 👺 Goblin (1x1)
               </button>
-              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👹" data-img="./src/Tokens/HobGoblin.png" data-size="2" data-color="#f59e0b" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
+              <button class="btn btn-secondary quick-token-btn" data-name="" data-avatar="👹" data-img="./src/img/HobGoblin.png" data-size="2" data-color="#f59e0b" style="justify-content: flex-start; font-size: 0.8rem; padding: 4px 8px;">
                 👹 HobGoblin (2x2)
               </button>
             </div>
-
-            <!-- Master Equipment Cards Spawner (src/Equip/) -->
-            <h4 style="margin-bottom: 6px; font-size: 0.8rem; color: var(--accent-gold); margin-top: 10px;">📦 Inserir Equipamento no Grid (Mestre)</h4>
-            <form id="form-spawn-equip" style="margin-bottom: 12px;">
-              <div class="form-group" style="margin-bottom: 6px;">
-                <label for="equip-card-select" style="font-size: 0.75rem;">Carta de Equipamento (src/Equip/)</label>
-                <select id="equip-card-select" class="form-control" style="font-size: 0.8rem; padding: 6px;">
-                  <option value="IC1x1" data-cols="1" data-rows="1">🛡️ IC1x1 (1x1 - Anel/Item Pequeno)</option>
-                  <option value="IC1x2" data-cols="1" data-rows="2">🗡️ IC1x2 (1x2 - Adaga/Varinha)</option>
-                  <option value="IC1x3" data-cols="1" data-rows="3">⚔️ IC1x3 (1x3 - Espada/Faca)</option>
-                  <option value="IC1x4" data-cols="1" data-rows="4">🏹 IC1x4 (1x4 - Arco/Lança)</option>
-                  <option value="IC2x1" data-cols="2" data-rows="1">🛡️ IC2x1 (2x1 - Broquel/Poção)</option>
-                  <option value="IC2x2" data-cols="2" data-rows="2" selected>🛡️ IC2x2 (2x2 - Escudo Médio)</option>
-                  <option value="IC2x3" data-cols="2" data-rows="3">🥋 IC2x3 (2x3 - Traje/Armadura)</option>
-                  <option value="IC2x4" data-cols="2" data-rows="4">🛡️ IC2x4 (2x4 - Escudo Torre)</option>
-                  <option value="IC3x1" data-cols="3" data-rows="1">🍞 IC3x1 (3x1 - Mantimentos)</option>
-                  <option value="IC3x2" data-cols="3" data-rows="2">📦 IC3x2 (3x2 - Caixa/Mochila)</option>
-                  <option value="IC3x3" data-cols="3" data-rows="3">📦 IC3x3 (3x3 - Baú/Carga)</option>
-                  <option value="IC3x4" data-cols="3" data-rows="4">📜 IC3x4 (3x4 - Pergaminho/Grimório)</option>
-                  <option value="IC4x1" data-cols="4" data-rows="1">🦯 IC4x1 (4x1 - Cajado Grande)</option>
-                  <option value="IC4x2" data-cols="4" data-rows="2">📜 IC4x2 (4x2 - Estandarte)</option>
-                  <option value="IC4x3" data-cols="4" data-rows="3">⛺ IC4x3 (4x3 - Tenda/Kit)</option>
-                </select>
-              </div>
-
-              <div class="form-group" style="margin-bottom: 6px;">
-                <label for="equip-name-input" style="font-size: 0.75rem;">Nome do Item (Opcional)</label>
-                <input type="text" id="equip-name-input" class="form-control" placeholder="Ex: Espada Longa" style="font-size: 0.8rem; padding: 6px;" />
-              </div>
-
-              <button type="submit" class="btn btn-secondary" style="width: 100%; font-size: 0.8rem; padding: 6px; border-color: var(--accent-gold); color: var(--accent-gold);">
-                📦 Inserir Equipamento no Tabuleiro
-              </button>
-            </form>
 
             <!-- Token Edit Section (Shows when token is selected) -->
             <div id="token-edit-panel" class="hidden" style="padding: 10px; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--accent-primary); border-radius: var(--radius-sm); margin-top: 10px;">

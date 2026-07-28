@@ -3,7 +3,6 @@ import { auth } from './auth.js';
 import { lobbyManager } from './lobby.js';
 import { diceEngine } from './dice.js';
 import { boardEngine } from './board.js';
-import { poiseLoader } from './poiseLoader.js';
 
 /**
  * UI Renderer & DOM Controller
@@ -14,7 +13,6 @@ class UIController {
     this.toastContainer = null;
     this.showFloatingPlayers = true;
     this.tokenNameCounters = {};
-    this.activePoiseSheet = null;
   }
 
   init() {
@@ -77,8 +75,6 @@ class UIController {
       this.showGlobalDiceAnnouncement(data);
     } else if (event === 'DICE_SELECTED') {
       this.updateDiceSelectionUI(data);
-    } else if (event === 'SHEET_SLOT_CLICKED') {
-      this.openPoiseModal(data.slotId, data.sheetData);
     }
   }
 
@@ -199,74 +195,20 @@ class UIController {
       this.showToast('Mapa de fundo removido.', 'info');
     });
 
-    // Character Sheet Controls (.poise upload, image upload, focus & modal)
-    document.getElementById('btn-download-poise')?.addEventListener('click', () => {
-      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
-      const sheetData = state.characterSheets[slotId] || this.activePoiseSheet;
-      if (sheetData && (sheetData.fields || sheetData.bgImage)) {
-        const charNameField = (sheetData.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
-        const name = charNameField?.value?.trim()?.split('\n')[0] || `Planilha_Vaga_${Number(slotId) + 1}`;
-        poiseLoader.exportPoiseFile(sheetData, `${name}.poise`);
-        this.showToast(`Planilha '${name}.poise' baixada com sucesso!`, 'success');
-      } else {
-        this.showToast('Nenhuma planilha carregada para baixar nesta vaga.', 'error');
-      }
-    });
-
-    document.getElementById('btn-modal-save-poise')?.addEventListener('click', () => {
-      const slotId = this.activePoiseSlotId || 0;
-      const sheetData = state.characterSheets[slotId] || this.activePoiseSheet;
-      if (sheetData && (sheetData.fields || sheetData.bgImage)) {
-        const charNameField = (sheetData.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
-        const name = charNameField?.value?.trim()?.split('\n')[0] || `Planilha_Vaga_${Number(slotId) + 1}`;
-        poiseLoader.exportPoiseFile(sheetData, `${name}.poise`);
-        this.showToast(`Planilha '${name}.poise' baixada com sucesso!`, 'success');
-      }
-    });
-
-    document.getElementById('btn-close-poise-modal')?.addEventListener('click', () => {
-      this.closePoiseModal();
-    });
-
-    document.getElementById('board-poise-modal')?.addEventListener('click', (e) => {
-      if (e.target.id === 'board-poise-modal') {
-        this.closePoiseModal();
-      }
-    });
-
-    document.getElementById('poise-file-input')?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
-      if (file) {
-        poiseLoader.parsePoiseFile(file, (err, parsedData) => {
-          if (err) {
-            this.showToast(err.message, 'error');
-          } else {
-            parsedData.ownerId = state.currentUser?.id;
-            parsedData.ownerName = state.currentUser?.username || 'Jogador';
-            state.updateCharacterSheet(slotId, parsedData);
-            this.showToast(`Planilha .poise alocada na Vaga ${Number(slotId) + 1}!`, 'success');
-            boardEngine.focusSlot(slotId);
-            this.openPoiseModal(slotId, parsedData);
-          }
-        });
-      }
-    });
-
+    // Character Sheet Controls
     document.getElementById('sheet-file-input')?.addEventListener('change', (e) => {
       const file = e.target.files[0];
-      const slotId = document.getElementById('sheet-slot-select')?.value || 0;
-      if (file) {
+      const slotId = document.getElementById('sheet-slot-select')?.value;
+      if (file && slotId !== undefined) {
         this.showToast('Processando imagem da planilha...', 'info');
         this.compressMapImage(file, (optimizedDataUrl) => {
-          const sheetData = state.characterSheets[slotId] || poiseLoader.createEmptyPoiseSheet();
-          sheetData.bgImage = optimizedDataUrl;
-          sheetData.imageUrl = optimizedDataUrl;
-          sheetData.ownerId = state.currentUser?.id;
-          sheetData.ownerName = state.currentUser?.username || 'Jogador';
-          state.updateCharacterSheet(slotId, sheetData);
-          this.showToast(`Imagem de planilha alocada na Vaga ${Number(slotId) + 1}!`, 'success');
-          boardEngine.focusSlot(slotId);
+          try {
+            boardEngine.setSheetImage(slotId, optimizedDataUrl, true);
+            this.showToast('Planilha atualizada e exibida na mesa!', 'success');
+            this.updateSheetSelectOptions();
+          } catch (err) {
+            this.showToast(err.message, 'error');
+          }
         });
       }
     });
@@ -274,36 +216,10 @@ class UIController {
     document.getElementById('btn-focus-sheet')?.addEventListener('click', () => {
       const slotId = document.getElementById('sheet-slot-select')?.value || 0;
       boardEngine.focusSlot(slotId);
-      const sheetData = state.characterSheets[slotId];
-      this.openPoiseModal(slotId, sheetData);
     });
 
     document.getElementById('btn-focus-map')?.addEventListener('click', () => {
       boardEngine.centerView();
-    });
-
-    // Master Equipment Cards Spawner (src/Equip/)
-    document.getElementById('form-spawn-equip')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const selectEl = document.getElementById('equip-card-select');
-      if (!selectEl) return;
-
-      const selectedOpt = selectEl.options[selectEl.selectedIndex];
-      const imageName = selectEl.value; // e.g. IC2x2
-      const cols = Number(selectedOpt.dataset.cols) || 2;
-      const rows = Number(selectedOpt.dataset.rows) || 2;
-      const rawName = document.getElementById('equip-name-input')?.value || selectedOpt.text.split(' (')[0];
-
-      const imageUrl = `./src/Equip/${imageName}.png`;
-      const finalName = this.getAutoTokenName(rawName, imageUrl, '📦');
-
-      boardEngine.addToken(finalName, '📦', '#f59e0b', state.currentUser?.id, Math.max(cols, rows), imageUrl, true, {
-        cols,
-        rows,
-        isEquipment: true
-      });
-
-      this.showToast(`Equipamento '${finalName}' (${cols}x${rows}) inserido no tabuleiro!`, 'success');
     });
 
     // Token Spawner
@@ -585,109 +501,6 @@ class UIController {
         boardEngine.init('tabletop-canvas-container');
       }, 50);
     }
-  }
-
-  openPoiseModal(slotId, sheetData) {
-    const modal = document.getElementById('board-poise-modal');
-    const container = document.getElementById('poise-modal-editor-container');
-    const titleEl = document.getElementById('poise-modal-title');
-    if (!modal || !container) return;
-
-    this.activePoiseSlotId = slotId;
-    this.activePoiseSheet = sheetData || poiseLoader.createEmptyPoiseSheet();
-
-    const charNameField = (this.activePoiseSheet.fields || []).find(f => f.id === 'nome_desc' || f.name?.includes('Nome'));
-    const charName = charNameField?.value?.trim()?.split('\n')[0] || `Vaga ${Number(slotId) + 1}`;
-    if (titleEl) titleEl.textContent = `📋 Planilha: ${charName} (Vaga ${Number(slotId) + 1})`;
-
-    this.renderPoiseSheetInContainer(container, this.activePoiseSheet, slotId);
-    modal.classList.remove('hidden');
-  }
-
-  closePoiseModal() {
-    const modal = document.getElementById('board-poise-modal');
-    if (modal) modal.classList.add('hidden');
-  }
-
-  renderPoiseSheetInContainer(container, sheetData, slotId) {
-    if (!sheetData) sheetData = poiseLoader.createEmptyPoiseSheet();
-    this.activePoiseSheet = sheetData;
-
-    if (!sheetData.bgImage && (!sheetData.fields || sheetData.fields.length === 0)) {
-      container.innerHTML = `
-        <div style="padding: 40px; text-align: center; color: var(--accent-gold);">
-          <h4 style="margin-bottom: 8px;">📋 Vaga ${Number(slotId) + 1} Vazia</h4>
-          <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px;">Faça upload do seu arquivo <strong>.poise</strong> ou imagem na barra lateral para exibir e editar sua planilha nesta vaga de 17x22.</p>
-          <label class="btn btn-primary" style="font-size: 0.85rem; padding: 8px 16px; cursor: pointer;">
-            📂 Carregar Arquivo .poise Nesta Vaga
-            <input type="file" class="modal-poise-upload-input" accept=".poise,.json" style="display: none;" />
-          </label>
-        </div>
-      `;
-
-      container.querySelector('.modal-poise-upload-input')?.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          poiseLoader.parsePoiseFile(file, (err, parsedData) => {
-            if (err) {
-              this.showToast(err.message, 'error');
-            } else {
-              parsedData.ownerId = state.currentUser?.id;
-              parsedData.ownerName = state.currentUser?.username || 'Jogador';
-              this.activePoiseSheet = parsedData;
-              state.updateCharacterSheet(slotId, parsedData);
-              this.renderPoiseSheetInContainer(container, parsedData, slotId);
-              this.showToast('Planilha .poise carregada com sucesso!', 'success');
-            }
-          });
-        }
-      });
-      return;
-    }
-
-    container.innerHTML = `
-      <div style="position: relative; width: 100%; display: inline-block;">
-        ${sheetData.bgImage ? `<img src="${sheetData.bgImage}" style="width: 100%; display: block; height: auto;" />` : ''}
-        <div id="poise-fields-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto;">
-          ${(sheetData.fields || []).map((f, i) => {
-            const isTextarea = f.type === 'textarea';
-            const tag = isTextarea ? 'textarea' : 'input';
-            const inputType = isTextarea ? '' : 'type="text"';
-            const align = f.align || 'left';
-            const fontSize = Math.max(9, Math.round((f.fontSize || 12) * 0.8));
-
-            return `
-              <${tag} ${inputType}
-                data-field-index="${i}"
-                data-field-id="${f.id || ''}"
-                class="poise-field-input"
-                style="position: absolute; left: ${f.x}%; top: ${f.y}%; width: ${f.w}%; height: ${f.h}%; font-size: ${fontSize}px; text-align: ${align}; background: rgba(255,255,255,0.75); color: #0f172a; font-weight: bold; border: 1px dashed rgba(139,92,246,0.4); border-radius: 2px; padding: 1px 3px; box-sizing: border-box; resize: none; font-family: sans-serif;"
-                title="${f.name || f.id || ''}"
-              >${isTextarea ? (f.value || '') : ''}</${tag}>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-
-    // Set non-textarea input values
-    container.querySelectorAll('input.poise-field-input').forEach(el => {
-      const idx = el.dataset.fieldIndex;
-      if (idx !== undefined && sheetData.fields[idx]) {
-        el.value = sheetData.fields[idx].value || '';
-      }
-    });
-
-    // Bind input change events
-    container.querySelectorAll('.poise-field-input').forEach(inputEl => {
-      inputEl.addEventListener('input', (e) => {
-        const idx = e.target.dataset.fieldIndex;
-        if (idx !== undefined && this.activePoiseSheet && this.activePoiseSheet.fields[idx]) {
-          this.activePoiseSheet.fields[idx].value = e.target.value;
-          state.updateCharacterSheet(slotId, this.activePoiseSheet);
-        }
-      });
-    });
   }
 
   renderNav() {

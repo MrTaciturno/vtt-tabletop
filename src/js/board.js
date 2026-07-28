@@ -52,10 +52,6 @@ class BoardEngine {
     this.dragStartGridY = 0;
     this.dragCurrentPixelX = 0;
     this.dragCurrentPixelY = 0;
-    this.dragMouseOffsetX = 0;
-    this.dragMouseOffsetY = 0;
-    this.dragTopLeftPixelX = 0;
-    this.dragTopLeftPixelY = 0;
     this.dragWaypoints = []; // Array of grid waypoint objects [{ x, y }]
 
     // Master Drawing Tools State
@@ -73,11 +69,6 @@ class BoardEngine {
 
     this.lastMouseX = 0;
     this.lastMouseY = 0;
-
-    // Network Throttling & Lerp Animation State
-    this.lastDragEmitTime = 0;
-    this.DRAG_EMIT_INTERVAL = 20; // 50Hz network limit (20ms)
-    this.animatingSmoothTokens = false;
 
     // Bindings
     this.onResize = this.resize.bind(this);
@@ -330,7 +321,7 @@ class BoardEngine {
     this.render();
   }
 
-  addToken(name, avatar, color = '#8b5cf6', ownerId = null, size = 1, imageUrl = null, broadcast = true, extraProps = {}) {
+  addToken(name, avatar, color = '#8b5cf6', ownerId = null, size = 1, imageUrl = null, broadcast = true) {
     const tokenId = 'tok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
     
     const x = this.mapOriginX + Math.floor(this.mapCols / 2);
@@ -342,9 +333,6 @@ class BoardEngine {
       avatar,
       color,
       size: Math.max(1, Math.min(4, Number(size) || 1)),
-      cols: Number(extraProps.cols) || Number(size) || 1,
-      rows: Number(extraProps.rows) || Number(size) || 1,
-      isEquipment: Boolean(extraProps.isEquipment),
       imageUrl: imageUrl || null,
       ownerId: ownerId || state.currentUser?.id,
       x,
@@ -363,62 +351,14 @@ class BoardEngine {
   moveToken(tokenId, x, y, broadcast = true) {
     const token = this.tokens.find(t => t.id === tokenId);
     if (token) {
-      const newX = Math.max(0, Math.min(this.totalCols - 1, x));
-      const newY = Math.max(0, Math.min(this.totalRows - 1, y));
+      token.x = Math.max(0, Math.min(this.totalCols - 1, x));
+      token.y = Math.max(0, Math.min(this.totalRows - 1, y));
+      this.render();
 
-      if (!broadcast) {
-        // Received from remote peer: smoothly interpolate position
-        token.targetX = newX;
-        token.targetY = newY;
-        this.startSmoothTokenAnimation();
-      } else {
-        // Local movement: snap immediately
-        token.x = newX;
-        token.y = newY;
-        delete token.targetX;
-        delete token.targetY;
-        this.render();
-
+      if (broadcast) {
         network.broadcast('TOKEN_MOVED', { id: tokenId, x: token.x, y: token.y });
       }
     }
-  }
-
-  startSmoothTokenAnimation() {
-    if (this.animatingSmoothTokens) return;
-    this.animatingSmoothTokens = true;
-
-    const animateStep = () => {
-      let stillAnimating = false;
-
-      this.tokens.forEach(t => {
-        if (t.targetX !== undefined && t.targetY !== undefined) {
-          const dx = t.targetX - t.x;
-          const dy = t.targetY - t.y;
-
-          if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
-            t.x += dx * 0.45;
-            t.y += dy * 0.45;
-            stillAnimating = true;
-          } else {
-            t.x = t.targetX;
-            t.y = t.targetY;
-            delete t.targetX;
-            delete t.targetY;
-          }
-        }
-      });
-
-      this.render();
-
-      if (stillAnimating) {
-        requestAnimationFrame(animateStep);
-      } else {
-        this.animatingSmoothTokens = false;
-      }
-    };
-
-    requestAnimationFrame(animateStep);
   }
 
   updateToken(tokenId, updates, broadcast = true) {
@@ -553,25 +493,6 @@ class BoardEngine {
       } else if (this.draggedToken && container) {
         this.dragCurrentPixelX = worldPos.x;
         this.dragCurrentPixelY = worldPos.y;
-
-        this.dragTopLeftPixelX = worldPos.x - this.dragMouseOffsetX;
-        this.dragTopLeftPixelY = worldPos.y - this.dragMouseOffsetY;
-
-        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
-
-        const now = Date.now();
-        if (now - this.lastDragEmitTime >= this.DRAG_EMIT_INTERVAL) {
-          this.lastDragEmitTime = now;
-          const currentGridX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
-          const currentGridY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
-
-          if (this.draggedToken.x !== currentGridX || this.draggedToken.y !== currentGridY) {
-            this.draggedToken.x = currentGridX;
-            this.draggedToken.y = currentGridY;
-            network.broadcast('TOKEN_MOVED', { id: this.draggedToken.id, x: currentGridX, y: currentGridY });
-          }
-        }
-
         this.render();
 
       } else if (this.isPanning) {
@@ -635,9 +556,8 @@ class BoardEngine {
       }
 
       if (this.draggedToken) {
-        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
-        const gridX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
-        const gridY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
+        const gridX = Math.max(0, Math.min(this.totalCols - 1, Math.floor(this.dragCurrentPixelX / this.cellSize)));
+        const gridY = Math.max(0, Math.min(this.totalRows - 1, Math.floor(this.dragCurrentPixelY / this.cellSize)));
 
         this.moveToken(this.draggedToken.id, gridX, gridY, true);
         this.draggedToken = null;
@@ -653,9 +573,9 @@ class BoardEngine {
       if ((e.code === 'Space' || e.key === ' ') && this.draggedToken) {
         e.preventDefault();
 
-        const tSize = Math.max(1, Math.min(4, Number(this.draggedToken.size) || 1));
-        const targetX = Math.max(0, Math.min(this.totalCols - tSize, Math.floor(this.dragTopLeftPixelX / this.cellSize)));
-        const targetY = Math.max(0, Math.min(this.totalRows - tSize, Math.floor(this.dragTopLeftPixelY / this.cellSize)));
+        const gridPos = this.screenToGrid(this.lastMouseX, this.lastMouseY);
+        const targetX = Math.max(0, Math.min(this.totalCols - 1, gridPos.x));
+        const targetY = Math.max(0, Math.min(this.totalRows - 1, gridPos.y));
 
         const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
         if (!lastWp || lastWp.x !== targetX || lastWp.y !== targetY) {
@@ -784,7 +704,7 @@ class BoardEngine {
 
     stage.addChild(drawingsGfx);
 
-    // Layer 2: Character Sheet Slots (17x22 Regions)
+    // Layer 2: Character Sheet Slots
     const slots = this.getSlots();
     const sheets = state.characterSheets || {};
 
@@ -795,23 +715,19 @@ class BoardEngine {
       const slotPixelH = slot.rows * this.cellSize;
 
       const sheet = sheets[slot.id];
-      const imgUrl = sheet?.bgImage || sheet?.imageUrl || null;
-
       const slotContainer = new PIXI.Container();
       slotContainer.x = slotPixelX;
       slotContainer.y = slotPixelY;
-      slotContainer.eventMode = 'static';
-      slotContainer.cursor = 'pointer';
 
       const slotGfx = new PIXI.Graphics();
 
-      if (imgUrl) {
+      if (sheet && sheet.imageUrl) {
         slotGfx.beginFill(0x0f172a, 0.95);
         slotGfx.drawRect(0, 0, slotPixelW, slotPixelH);
         slotGfx.endFill();
         slotContainer.addChild(slotGfx);
 
-        const sheetTexture = PIXI.Texture.from(imgUrl);
+        const sheetTexture = PIXI.Texture.from(sheet.imageUrl);
         const sheetSprite = new PIXI.Sprite(sheetTexture);
 
         sheetTexture.baseTexture.on('loaded', () => {
@@ -841,7 +757,7 @@ class BoardEngine {
         borderGfx.endFill();
         slotContainer.addChild(borderGfx);
 
-        const labelText = new PIXI.Text(`📋 ${sheet.ownerName || sheet.name || 'Planilha'} (Clique p/ Abrir)`, {
+        const labelText = new PIXI.Text(`📋 Planilha: ${sheet.ownerName}`, {
           fontFamily: 'sans-serif',
           fontSize: 12,
           fontWeight: 'bold',
@@ -874,9 +790,9 @@ class BoardEngine {
         labelText.y = 6;
         slotContainer.addChild(labelText);
 
-        const placeholderText = new PIXI.Text(`📋 ${slot.label}\nVaga de Planilha 17x22\n(Clique para abrir / carregar)`, {
+        const placeholderText = new PIXI.Text(`📋 ${slot.label}\nVaga de Planilha 17x22`, {
           fontFamily: 'sans-serif',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 'bold',
           fill: 0xeab308,
           align: 'center'
@@ -886,10 +802,6 @@ class BoardEngine {
         placeholderText.y = slotPixelH / 2;
         slotContainer.addChild(placeholderText);
       }
-
-      slotContainer.on('pointerdown', () => {
-        state.notify('SHEET_SLOT_CLICKED', { slotId: slot.id, sheetData: sheet });
-      });
 
       stage.addChild(slotContainer);
     });
@@ -937,15 +849,12 @@ class BoardEngine {
 
     this.tokens.forEach(t => {
       const tokGroup = new PIXI.Container();
-      const tCols = Math.max(1, Math.min(4, Number(t.cols) || Number(t.size) || 1));
-      const tRows = Math.max(1, Math.min(4, Number(t.rows) || Number(t.size) || 1));
+      const tSize = Math.max(1, Math.min(4, Number(t.size) || 1));
       
       const isBeingDragged = this.draggedToken && this.draggedToken.id === t.id;
-      const topLeftCenterX = isBeingDragged ? this.dragTopLeftPixelX : (t.x + 0.5) * this.cellSize;
-      const topLeftCenterY = isBeingDragged ? this.dragTopLeftPixelY : (t.y + 0.5) * this.cellSize;
-
-      const centerX = topLeftCenterX + ((tCols - 1) * this.cellSize) / 2;
-      const centerY = topLeftCenterY + ((tRows - 1) * this.cellSize) / 2;
+      const centerX = isBeingDragged ? this.dragCurrentPixelX : (t.x + tSize / 2) * this.cellSize;
+      const centerY = isBeingDragged ? this.dragCurrentPixelY : (t.y + tSize / 2) * this.cellSize;
+      const radius = ((tSize * this.cellSize) / 2) * 0.88;
 
       tokGroup.x = centerX;
       tokGroup.y = centerY;
@@ -954,111 +863,65 @@ class BoardEngine {
 
       const hexColor = parseInt((t.color || '#8b5cf6').replace('#', '0x'), 16);
 
-      if (t.isEquipment || tCols !== tRows) {
-        // Equipment Card Rectangular Sprite
-        const rectWidth = tCols * this.cellSize * 0.94;
-        const rectHeight = tRows * this.cellSize * 0.94;
+      if (t.imageUrl) {
+        // Image Token Sprite
+        const tex = PIXI.Texture.from(t.imageUrl);
+        const sprite = new PIXI.Sprite(tex);
+        sprite.anchor.set(0.5);
+        sprite.width = radius * 1.8;
+        sprite.height = radius * 1.8;
 
-        if (t.imageUrl) {
-          const tex = PIXI.Texture.from(t.imageUrl);
-          const sprite = new PIXI.Sprite(tex);
-          sprite.anchor.set(0.5);
-          sprite.width = rectWidth;
-          sprite.height = rectHeight;
+        // Circular Background & Border for Image Token
+        const circleGfx = new PIXI.Graphics();
+        circleGfx.beginFill(0x0f172a, isBeingDragged ? 0.85 : 1.0);
+        circleGfx.drawCircle(0, 0, radius);
+        circleGfx.endFill();
 
-          const borderGfx = new PIXI.Graphics();
-          borderGfx.lineStyle(2.5, hexColor, 1);
-          borderGfx.drawRoundedRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight, 6);
-
-          tokGroup.addChild(sprite);
-          tokGroup.addChild(borderGfx);
-        } else {
-          const cardGfx = new PIXI.Graphics();
-          cardGfx.beginFill(0x1e293b, 0.95);
-          cardGfx.lineStyle(2.5, hexColor, 1);
-          cardGfx.drawRoundedRect(-rectWidth / 2, -rectHeight / 2, rectWidth, rectHeight, 6);
-          cardGfx.endFill();
-
-          const cardText = new PIXI.Text(t.name || 'Item', {
-            fontFamily: 'sans-serif',
-            fontSize: 11,
-            fontWeight: 'bold',
-            fill: 0xffffff
-          });
-          cardText.anchor.set(0.5);
-
-          tokGroup.addChild(cardGfx);
-          tokGroup.addChild(cardText);
-        }
-
-        // Selected Highlight Outline
-        if (this.selectedTokenId === t.id) {
-          const selGfx = new PIXI.Graphics();
-          selGfx.lineStyle(3.5, 0xf59e0b, 1);
-          selGfx.drawRoundedRect(-rectWidth / 2 - 3, -rectHeight / 2 - 3, rectWidth + 6, rectHeight + 6, 8);
-          tokGroup.addChild(selGfx);
-        }
+        circleGfx.lineStyle(3, hexColor, 1);
+        circleGfx.drawCircle(0, 0, radius);
+        tokGroup.addChild(circleGfx);
+        tokGroup.addChild(sprite);
 
       } else {
-        // Standard Circular Token Rendering
-        const radius = ((tCols * this.cellSize) / 2) * 0.88;
+        // Emoji Token Base Graphic
+        const circleGfx = new PIXI.Graphics();
+        circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
+        circleGfx.drawCircle(0, 0, radius);
+        circleGfx.endFill();
 
-        if (t.imageUrl) {
-          const tex = PIXI.Texture.from(t.imageUrl);
-          const sprite = new PIXI.Sprite(tex);
-          sprite.anchor.set(0.5);
-          sprite.width = radius * 1.8;
-          sprite.height = radius * 1.8;
+        circleGfx.lineStyle(2.5, 0xffffff, 1);
+        circleGfx.drawCircle(0, 0, radius);
+        tokGroup.addChild(circleGfx);
 
-          const circleGfx = new PIXI.Graphics();
-          circleGfx.beginFill(0x0f172a, isBeingDragged ? 0.85 : 1.0);
-          circleGfx.drawCircle(0, 0, radius);
-          circleGfx.endFill();
-
-          circleGfx.lineStyle(3, hexColor, 1);
-          circleGfx.drawCircle(0, 0, radius);
-          tokGroup.addChild(circleGfx);
-          tokGroup.addChild(sprite);
-
-        } else {
-          const circleGfx = new PIXI.Graphics();
-          circleGfx.beginFill(hexColor, isBeingDragged ? 0.85 : 1.0);
-          circleGfx.drawCircle(0, 0, radius);
-          circleGfx.endFill();
-
-          circleGfx.lineStyle(2.5, 0xffffff, 1);
-          circleGfx.drawCircle(0, 0, radius);
-          tokGroup.addChild(circleGfx);
-
-          const avatarText = new PIXI.Text(t.avatar || '🎲', {
-            fontSize: radius * 1.0
-          });
-          avatarText.anchor.set(0.5);
-          avatarText.y = 1;
-          tokGroup.addChild(avatarText);
-        }
-
-        // Selected Highlight Ring
-        if (this.selectedTokenId === t.id) {
-          const selGfx = new PIXI.Graphics();
-          selGfx.lineStyle(3.5, 0xf59e0b, 1);
-          selGfx.drawCircle(0, 0, radius + 5);
-          tokGroup.addChild(selGfx);
-        }
-
-        // Name Label Tag
-        const nameText = new PIXI.Text(t.name, {
-          fontFamily: 'sans-serif',
-          fontSize: Math.max(10, 9 + tCols),
-          fontWeight: 'bold',
-          fill: 0xffffff,
-          stroke: 0x000000,
-          strokeThickness: 3
+        // Avatar Emoji Text
+        const avatarText = new PIXI.Text(t.avatar || '🎲', {
+          fontSize: radius * 1.0
         });
-        nameText.anchor.set(0.5, 0);
-        nameText.y = radius + 4;
-        tokGroup.addChild(nameText);
+        avatarText.anchor.set(0.5);
+        avatarText.y = 1;
+        tokGroup.addChild(avatarText);
       }
+
+      // Selected Highlight Ring
+      if (this.selectedTokenId === t.id) {
+        const selGfx = new PIXI.Graphics();
+        selGfx.lineStyle(3.5, 0xf59e0b, 1);
+        selGfx.drawCircle(0, 0, radius + 5);
+        tokGroup.addChild(selGfx);
+      }
+
+      // Name Label Tag
+      const nameText = new PIXI.Text(t.name, {
+        fontFamily: 'sans-serif',
+        fontSize: Math.max(10, 9 + tSize),
+        fontWeight: 'bold',
+        fill: 0xffffff,
+        stroke: 0x000000,
+        strokeThickness: 3
+      });
+      nameText.anchor.set(0.5, 0);
+      nameText.y = radius + 4;
+      tokGroup.addChild(nameText);
 
       // Interactive Pointer Events
       tokGroup.on('pointerdown', (e) => {
@@ -1078,17 +941,6 @@ class BoardEngine {
           this.lastMouseY = (origEvent.clientY || 0) - rect.top;
 
           const worldPos = this.screenToWorld(this.lastMouseX, this.lastMouseY);
-
-          // Top-left cell center of the token:
-          const topLeftCenterX = (t.x + 0.5) * this.cellSize;
-          const topLeftCenterY = (t.y + 0.5) * this.cellSize;
-
-          // Mouse offset relative to the TOP-LEFT cell center:
-          this.dragMouseOffsetX = worldPos.x - topLeftCenterX;
-          this.dragMouseOffsetY = worldPos.y - topLeftCenterY;
-
-          this.dragTopLeftPixelX = topLeftCenterX;
-          this.dragTopLeftPixelY = topLeftCenterY;
           this.dragCurrentPixelX = worldPos.x;
           this.dragCurrentPixelY = worldPos.y;
 
@@ -1125,12 +977,12 @@ class BoardEngine {
         accumulatedDist += Math.hypot(wp2.x - wp1.x, wp2.y - wp1.y);
       }
 
-      // 2. Draw current active segment from last waypoint to current top-left cell center
+      // 2. Draw current active segment from last waypoint to current free cursor position
       const lastWp = this.dragWaypoints[this.dragWaypoints.length - 1];
       const lastPxX = (lastWp.x + 0.5) * this.cellSize;
       const lastPxY = (lastWp.y + 0.5) * this.cellSize;
-      const currPxX = this.dragTopLeftPixelX;
-      const currPxY = this.dragTopLeftPixelY;
+      const currPxX = this.dragCurrentPixelX;
+      const currPxY = this.dragCurrentPixelY;
 
       vectorGfx.moveTo(lastPxX, lastPxY);
       vectorGfx.lineTo(currPxX, currPxY);
