@@ -11,6 +11,9 @@ import { boardEngine } from './board.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   window.vttApp = {
+    openSheetModal: (slotId) => {
+      ui.openSheetModal(slotId);
+    },
     reorderTurn: (fromIndex, direction) => {
       lobbyManager.movePlayerTurn(fromIndex, direction);
     },

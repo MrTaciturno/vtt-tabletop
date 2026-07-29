@@ -730,6 +730,7 @@ class BoardEngine {
       const slotContainer = new PIXI.Container();
       slotContainer.x = slotPixelX;
       slotContainer.y = slotPixelY;
+      slotContainer.eventMode = 'static';
 
       const slotGfx = new PIXI.Graphics();
 
@@ -832,6 +833,9 @@ class BoardEngine {
         const triggerModal = (e) => {
           if (e && e.stopPropagation) e.stopPropagation();
           state.notify('OPEN_SHEET_MODAL', { slotId: slot.id });
+          if (window.vttApp && window.vttApp.openSheetModal) {
+            window.vttApp.openSheetModal(slot.id);
+          }
         };
 
         editBtnGfx.on('pointerdown', triggerModal);
@@ -887,6 +891,9 @@ class BoardEngine {
         const triggerModal = (e) => {
           if (e && e.stopPropagation) e.stopPropagation();
           state.notify('OPEN_SHEET_MODAL', { slotId: slot.id });
+          if (window.vttApp && window.vttApp.openSheetModal) {
+            window.vttApp.openSheetModal(slot.id);
+          }
         };
 
         editBtnGfx.on('pointerdown', triggerModal);
